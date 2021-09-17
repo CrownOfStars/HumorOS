@@ -28,3 +28,10 @@ constexpr int blockNum = 100 * 1024;
 //字符串
 std::vector<std::string> argv;//命令解释器解析出的参数
 std::vector<std::string> curPath;//保存当前所在的路径
+
+enum class BitmapOp {
+    ReadOnly, // 0
+    SetTrue, // 1
+    SetFalse,
+    Reverse
+};

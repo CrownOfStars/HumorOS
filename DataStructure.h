@@ -6,9 +6,9 @@ struct inode
 	int mode_uid = 0;//文件属性以及文件所属者 4byte
 	int fileSize = 0;//文件大小 4byte
 	//文件索引指针
-	int primaryIndex[10]{ 0 }; //10*4byte 包含320个文件夹或文件
-	int singleIndex = 0;
-	int doubleIndex = 0;
+	int baseFile_id[10]{ 0 }; //10*4byte 包含320个文件夹或文件
+	int singleIndex_id = 0;
+	int doubleIndex_id = 0;
 };//sum: 64 byte
 
 struct inodeMap
@@ -32,22 +32,24 @@ struct SuperBlock
 	Byte freeMem[1024 - 36]{ 0 };
 };
 
-std::string ParseDir(int dir_id, bool end)
+std::string ParseDir(int dir_id, bool* end)
 {
 	std::string value = "";
 	dirFile tempDir{ 0 };
-	memcpy_s(&tempDir, 1024, disk[dir_id], 1024);
+	memcpy_s(&tempDir, 1024, file_head[dir_id], 1024);
+
 	for (int i = 0; i < 32; i++)
 	{
 		if (tempDir.aMap[i].Name[0])
 		{
-			value += "\n";
 			value += tempDir.aMap[i].Name;
-			value += "\t";
+			value += "\t\t";
 			value += std::to_string(tempDir.aMap[i].inodeIndex);
+			value += "\n";
 		}
 		else
 		{
+			*end = true;
 			break;
 		}
 	}
@@ -69,24 +71,10 @@ std::string ParseInodeFile(int inode_id)
 			value += "\n";
 			for (int u = 0; u < 10; u++)
 			{
-				value += std::to_string(inodetemp.primaryIndex[u]);
+				value += std::to_string(inodetemp.baseFile_id[u]);
 				value += "\n";
 			}
 		}
 	}
 	return value;
 }
-
-//std::string ParseBitmap(int bitmap_id)
-//{
-//	std::string value;
-//	for (int u = 0; u < 1024; u++)
-//	{
-//		if (fileBitmap_head[bitmap_id][u] & (abit_quick[0] >> u))
-//		{
-//			value += "\n";
-//			value += std::to_string(u);
-//		}
-//	}
-//	return value;
-//}

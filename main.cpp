@@ -24,11 +24,11 @@ int getInodeId(inode* cur)
 {
 	if (cur->fileSize < 1024 * 10)
 	{
-		return cur->primaryIndex[cur->fileSize / 1024];
+		return cur->baseFile_id[cur->fileSize / 1024];
 	}
 	else if (cur->fileSize < 1024 * 10 + 1024 / 4 * 1024)
 	{
-		return SearchInIndex(cur->singleIndex);
+		return SearchInIndex(cur->singleIndex_id);
 	}
 	else
 	{
@@ -62,12 +62,11 @@ int Cd()
 
 int Dir()
 {
-	curDirInode;
-	std::string dirInfo = "";
+	std::string dirInfo = "filename\tinode\n";
 	bool endDir = false;
 	for (int i = 0; i < 10; i++)
 	{
-		dirInfo = ParseDir(curDirInode->primaryIndex[i],endDir);
+		dirInfo += ParseDir(curDirInode->baseFile_id[i], &endDir);
 		if (endDir)
 		{
 			std::cout << dirInfo.c_str();
@@ -75,58 +74,70 @@ int Dir()
 		}
 	}
 	//TODO: Search in
-	//curDirInode->singleIndex;
+	//curDirInode->singleIndex_id;
 	//curDirInode->doubleIndex;
 	std::cout << (dirInfo.c_str());
 	return NULL;
 }
 
-bool CheckRepeatName(bool cover = false)
+int MkDir()
 {
-	return false;
 	for (int i = 0; i < 10; i++)
 	{
 		dirFile d{ 0 };
-		//ParseFileAsDir(disk[curDirInode->primaryIndex[i]], &d);
+		memcpy_s(&d, 1024, file_head[curDirInode->baseFile_id[i]], 1024);
 		for (int u = 0; u < 32; u++)
 		{
 			if (d.aMap[u].Name[0])
 			{
 				if (strcmp(d.aMap[u].Name, argv[0].c_str()) == 0)
 				{
-					return true;
+					std::cout << ("file already exists\n");
+					return NULL;
 				}
 			}
 			else
 			{
-				if (cover) {
-					strcpy_s(d.aMap[u].Name, argv[0].c_str());
-				}
+				inode newInode{ 0 };
+				time_t timep;
+				time(&timep);
+				newInode.createTime = timep;
+				newInode.mode_uid;//TODO
+				AssignFile(&newInode);
+				d.aMap[u].inodeIndex = AssignInode(&newInode);//TODO
+				strcpy_s(d.aMap[u].Name, argv[0].c_str());
+				memcpy_s(file_head[curDirInode->baseFile_id[i]], 1024, &d, 1024);
 				return false;
 			}
 		}
 	}
-	//more index
-	return false;
-}
-
-int MkDir()
-{
-	if (CheckRepeatName(true))
-	{
-		std::cout << ("file already exists\n");
-	}
-	inode newInode{ 0 };
-	time_t timep;
-	time(&timep);
-	newInode.createTime = timep;
-	newInode.mode_uid;//TODO
-	LinkDir(AddDir(argv[0],AssignInode(&newInode)));//TODO
 	return NULL;
 }
 
 int RmDir()
 {
+	for (int i = 0; i < 10; i++)
+	{
+		dirFile d{ 0 };
+		memcpy_s(&d, 1024, file_head[curDirInode->baseFile_id[i]], 1024);
+		for (int u = 0; u < 32; u++)
+		{
+			if (d.aMap[u].Name[0])
+			{
+				if (strcmp(d.aMap[u].Name, argv[0].c_str()) == 0)
+				{
+					d.aMap[u].Name[0] = '\0';//rm dirinfo from parent dir
+					//d.aMap[u].inodeIndex//rm inode info from inodebitmap
+					//rm filebitmap
+				}
+			}
+			else
+			{
+				std::cout << ("no such file or dictionary\n");
+				return NULL;
+			}
+		}
+	}
 	return NULL;
 }
 
@@ -161,13 +172,6 @@ int Check()
 			int inode_file_id;
 			std::cin >> inode_file_id;
 			std::cout << ParseInodeFile(inode_file_id);
-		}
-		else if (cmd == "dir")
-		{
-			std::cout << "dir file id>";
-			int dir_file_id;
-			std::cin >> dir_file_id;
-			std::cout << ParseDir(dir_file_id,true);
 		}
 		else if (cmd == "bitmap")
 		{
@@ -214,8 +218,9 @@ void InitRootPath()
 	inode homeInode{ 0 };
 	homeInode.createTime = 1492244880;
 	//home dir 是文件区的第一个dir file
-	AddDir("home", AssignInode(&homeInode));
-	memcpy_s(curDirInode, 64,&homeInode, 64);
+	AssignFile(&homeInode);
+	AssignInode(&homeInode);
+	memcpy_s(curDirInode, 64, &homeInode, 64);
 }
 
 void InitCmdMapping()
@@ -252,11 +257,11 @@ void InitDisk()
 		{
 			memset(disk[i], 0, 1024);
 		}
-		inode_head = &disk[1];
-		fileBitmap_head = &disk[1025];
-		inodeBitmap_head = &disk[1038];
-		file_head = &disk[1040];
-		memcpy_s(inodeBitmap_head,1, &abit_quick[0], 1);
+		inode_head = disk + 1;
+		fileBitmap_head = disk + 1025;
+		inodeBitmap_head = disk + 1038;
+		file_head = disk + 1040;
+		memcpy_s(inodeBitmap_head, 1, &abit_quick[0], 1);
 		memcpy_s(fileBitmap_head, 1, &abit_quick[0], 1);
 		InitRootPath();
 		for (int i = 0; i < blockNum; i++)
@@ -290,12 +295,6 @@ void ShowCurPath()
 	}
 	std::cout << "/>";
 }
-
-/*
-File fp{0};
-void* p = &fp;
-dir* dp = (dir*)p;
-*/
 
 int main()
 {
@@ -333,7 +332,7 @@ int main()
 	Py_Finalize();
 	for (int i = 0; i < 102400; i++)
 	{
-		delete[] &disk[i];
+		delete[] & disk[i];
 	}
 	return 0;
 }

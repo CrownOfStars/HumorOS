@@ -18,7 +18,7 @@ inode* curDirInode = new inode();
 //	*/
 //}
 
-int FirstFit(File* bmap, bool cover = false)
+int FirstFit(File* bmap, BitmapOp bmo = BitmapOp::ReadOnly)
 {
 	for (int u = 0; u < 1024; u++)
 	{
@@ -26,10 +26,23 @@ int FirstFit(File* bmap, bool cover = false)
 		{
 			if (!((*bmap)[u] & (abit_quick[0] >> t)))
 			{
-				if (cover) {
+				switch (bmo) {
+				case BitmapOp::SetTrue: {
 					(*bmap)[u] |= (abit_quick[0] >> t);
+					break;
 				}
-				return t;
+				case BitmapOp::SetFalse: {
+					(*bmap)[u] &= ~(abit_quick[0] >> t);
+				}
+				case BitmapOp::ReadOnly: {
+					break;
+				}
+				case BitmapOp::Reverse: {
+					throw("error ¸ë");
+					break;
+				}
+				}
+				return u * 8 + t;
 			}
 		}
 	}
@@ -50,11 +63,12 @@ int FirstFit(File* bmap, bool cover = false)
 	return -1;
 }
 
-int SearchInBitmap(File* region, int bitmapSize, bool occupy = false)
+int SearchInBitmap(File* region, int bitmapSize, BitmapOp bmo)
 {
+	int idx = 0;
 	for (int i = 0; i < bitmapSize; i++)
 	{
-		int idx = FirstFit(region+i, occupy);
+		idx = FirstFit(region + i, bmo);
 		if (idx > 0)
 		{
 			return idx;
@@ -66,9 +80,9 @@ int SearchInBitmap(File* region, int bitmapSize, bool occupy = false)
 
 int AssignInode(inode* inodep)
 {
-	int inode_id = SearchInBitmap(inodeBitmap_head, inodeBitmapSize, true);
+	int inode_id = SearchInBitmap(inodeBitmap_head, inodeBitmapSize, BitmapOp::SetTrue);
 	int offset = inode_id % 16;
-	memcpy_s(inode_head[inode_id / 16] + offset * 64, 64, inodep, 64);
+	memcpy_s((inode_head + inode_id / 16)[offset * 64], 64, inodep, 64);
 	return inode_id;
 }
 
@@ -80,32 +94,17 @@ void RmInode(int inode_id)
 	//SetBitmap(inodeBitmap_head, inode_id, false);
 }
 
-int AddDir(std::string dirName, int inode_id)
+void AssignFile(inode* inodep)
 {
-	int file_id = SearchInBitmap(fileBitmap_head, 13, true);
-	dirFile tempdir{ 0 };
-	memcpy_s(&tempdir, 1024, (dirFile*)file_head[file_id], 1024);
-	for (int i = 0; i < 32; i++)
-	{
-		if (!tempdir.aMap[i].Name[0])
-		{
-			strcpy_s(tempdir.aMap[i].Name, dirName.c_str());
-			tempdir.aMap[i].inodeIndex = inode_id;
-			memcpy_s(file_head[file_id], 1024, (File*)&tempdir, 1024);
-			return file_id;
-		}
-	}
-	return 0;
-}
-
-void LinkDir(int file_id)
-{
+	int file_id = SearchInBitmap(fileBitmap_head, blockBitmapSize, BitmapOp::SetTrue);
 	for (int i = 0; i < 10; i++)
 	{
-		if (!curDirInode->primaryIndex[i]) {
-			curDirInode->primaryIndex[i] = file_id;
+		if (!inodep->baseFile_id[i])
+		{
+			inodep->baseFile_id[i] = file_id;//
 			return;
 		}
 	}
-	throw("¸ë ERROR");
+	throw("error ¸ë");
+	//inodep->baseFile_id;
 }
