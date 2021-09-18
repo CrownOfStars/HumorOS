@@ -78,3 +78,17 @@ std::string ParseInodeFile(int inode_id)
 	}
 	return value;
 }
+
+//std::string ParseBitmap(int bitmap_id)
+//{
+//	std::string value;
+//	for (int u = 0; u < 1024; u++)
+//	{
+//		if (fileBitmap_head[bitmap_id][u] & (abit_quick[0] >> u))
+//		{
+//			value += "\n";
+//			value += std::to_string(u);
+//		}
+//	}
+//	return value;
+//}

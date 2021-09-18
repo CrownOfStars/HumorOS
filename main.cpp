@@ -36,18 +36,6 @@ int getInodeId(inode* cur)
 	}
 }
 
-//void addSubDir(int block_id,std::string fname,int dirInode)
-//{
-//	for (int i = 0; i < maxFileinDir; i++) {
-//		if(!*(disk[block_id] + 32 * i))
-//		{
-//			strcpy(disk[block_id] + 32 * i,fname.c_str());
-//			//int 的数值写入到char中
-//			break;
-//		}
-//	}
-//}
-
 int Info()
 {
 	std::cout << ("this is info command.\n");
