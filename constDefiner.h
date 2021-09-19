@@ -1,4 +1,5 @@
 #pragma once
+#include<deque>
 #include<vector>
 #include<string>
 typedef char Byte;
@@ -25,9 +26,9 @@ constexpr int fileSize = 101360;//dir file region 100*1024 - 1040
 constexpr int iNodeNum = 16 * 1024;
 constexpr int blockNum = 100 * 1024;
 
-//字符串
-std::vector<std::string> argv;//命令解释器解析出的参数
 std::vector<std::string> curPath;//保存当前所在的路径
+
+std::string userName = "shu";
 
 enum class BitmapOp {
     ReadOnly, // 0

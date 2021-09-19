@@ -11,6 +11,7 @@
 
 
 SuperBlock supBlock;
+PyObject* argv = nullptr;
 
 std::map<std::string, int(*)()> mFuncPtr;
 
@@ -78,7 +79,7 @@ int MkDir()
 		{
 			if (d.aMap[u].Name[0])
 			{
-				if (strcmp(d.aMap[u].Name, argv[0].c_str()) == 0)
+				if (strcmp(d.aMap[u].Name, _PyUnicode_AsString(argv)) == 0)
 				{
 					std::cout << ("file already exists\n");
 					return NULL;
@@ -93,7 +94,7 @@ int MkDir()
 				newInode.mode_uid;//TODO
 				AssignFile(&newInode);
 				d.aMap[u].inodeIndex = AssignInode(&newInode);//TODO
-				strcpy_s(d.aMap[u].Name, argv[0].c_str());
+				strcpy_s(d.aMap[u].Name, _PyUnicode_AsString(argv));
 				memcpy_s(file_head[curDirInode->baseFile_id[i]], 1024, &d, 1024);
 				return false;
 			}
@@ -112,7 +113,7 @@ int RmDir()
 		{
 			if (d.aMap[u].Name[0])
 			{
-				if (strcmp(d.aMap[u].Name, argv[0].c_str()) == 0)
+				if (strcmp(d.aMap[u].Name, _PyUnicode_AsString(argv)) == 0)
 				{
 					d.aMap[u].Name[0] = '\0';//rm dirinfo from parent dir
 					//d.aMap[u].inodeIndex//rm inode info from inodebitmap
@@ -196,7 +197,7 @@ int Check()
 
 int Error()
 {
-	std::cout << (argv[0].c_str());
+	std::cout << _PyUnicode_AsString(argv) << std::endl;
 	return 0;
 }
 
@@ -257,7 +258,6 @@ void InitDisk()
 			fdisk.write(disk[i], 1024);
 		}
 		fdisk.close();
-		curPath.push_back("home");
 	}
 	else
 	{
@@ -277,11 +277,30 @@ void InitDisk()
 
 void ShowCurPath()
 {
+	std::cout << userName << "@Humor/";
 	for (int u = 0; u < curPath.size(); u++)
 	{
-		std::cout << '/' << curPath[u];
+		std::cout << curPath[u] << '/';
 	}
-	std::cout << "/>";
+	std::cout << ">";
+}
+
+void ExecuteBat(PyObject* batch)
+{
+	PyObject* po;
+	for (int i = 0; i < PyObject_Size(batch); i++)
+	{
+		po = PyList_GetItem(batch, i);
+		if (PyObject_Size(po) == 1)
+		{
+			mFuncPtr[_PyUnicode_AsString(PyTuple_GetItem(po, 0))]();
+		}
+		else if(PyObject_Size(po) == 2)
+		{
+			argv = PyTuple_GetItem(po, 1);
+			mFuncPtr[_PyUnicode_AsString(PyTuple_GetItem(po, 0))]();
+		}
+	}
 }
 
 int main()
@@ -292,30 +311,15 @@ int main()
 
 	PyObject* pModule = NULL;
 	PyObject* pFunc = NULL;
-	PyObject* pRet = NULL;
-	PyObject* pList = NULL;
 
 	//加载python脚本
 
 	pModule = PyImport_ImportModule("Pack");
 	pFunc = PyObject_GetAttrString(pModule, "Func");
-	std::string cmd;
 	while (true)
 	{
 		ShowCurPath();
-		pRet = PyEval_CallObject(pFunc, NULL);
-		cmd = std::string(_PyUnicode_AsString(PyTuple_GetItem(pRet, 0)));
-		pList = PyTuple_GetItem(pRet, 1);
-		std::string str_item;//c类型的列表元素
-		for (std::vector <std::string>::iterator iter = argv.begin(); iter != argv.end();)
-		{
-			iter = argv.erase(iter);
-		}
-		for (int i = 0; i < PyObject_Size(pList); i++)
-		{
-			argv.push_back(std::string(_PyUnicode_AsString(PyList_GetItem(pList, i))));
-		}
-		mFuncPtr[cmd]();
+		ExecuteBat(PyEval_CallObject(pFunc, NULL));
 	}
 	Py_Finalize();
 	for (int i = 0; i < 102400; i++)
