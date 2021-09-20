@@ -4,22 +4,22 @@
 
 inode* curDirInode = new inode();
 
-int* FirstFit(File* bmap,int mapSize, int assignSize)//Ë÷Òı·ÖÅä
+int* FirstFit(File* bmap,int mapSize, int assignSize)//ç´¢å¼•åˆ†é…
 {
-	int* assignFile_id = new int[assignSize];//½«Òª·ÖÅäµÄÎÄ¼şidµÄÁĞ±í
-	int curAssigned = 0;//µ±Ç°ÒÑ·ÖÅäµÄÏî
-	for (int i = 0; i < mapSize; i++)//±éÀú¸÷Î»Í¼¿é
+	int* assignFile_id = new int[assignSize];//å°†è¦åˆ†é…çš„æ–‡ä»¶idçš„åˆ—è¡¨
+	int curAssigned = 0;//å½“å‰å·²åˆ†é…çš„é¡¹
+	for (int i = 0; i < mapSize; i++)//éå†å„ä½å›¾å—
 	{
 		for (int u = 0; u < 1024; u++)
 		{
-			for (int t = 0; t < 8; t++)//ÖğÎ»²éÕÒ
+			for (int t = 0; t < 8; t++)//é€ä½æŸ¥æ‰¾
 			{
-				if (!((*bmap)[u] & (abit_quick[0] >> t)))//Èç¹û¸ÃÎ»Îª0
+				if (!((*bmap)[u] & (abit_quick[0] >> t)))//å¦‚æœè¯¥ä½ä¸º0
 				{
-					(*bmap)[u] |= (abit_quick[0] >> t);//°Ñ¸ÃÎ»ÉèÖÃÎª1
-					assignFile_id[curAssigned] = i*(1024*8)+u*8+t;//¼ÇÂ¼¸ÃÎ»µÄÎ»ÖÃ
+					(*bmap)[u] |= (abit_quick[0] >> t);//æŠŠè¯¥ä½è®¾ç½®ä¸º1
+					assignFile_id[curAssigned] = i*(1024*8)+u*8+t;//è®°å½•è¯¥ä½çš„ä½ç½®
 					curAssigned++;
-					if (curAssigned == assignSize)//Âú×ãÌõ¼ş£¬½áÊø
+					if (curAssigned == assignSize)//æ»¡è¶³æ¡ä»¶ï¼Œç»“æŸ
 					{
 						return assignFile_id;
 					}
@@ -27,21 +27,21 @@ int* FirstFit(File* bmap,int mapSize, int assignSize)//Ë÷Òı·ÖÅä
 			}
 		}
 	}
-	/* Î»ÔËËãÑİÊ¾
+	/* ä½è¿ç®—æ¼”ç¤º
 	11100000
-	10000000 == 1 -¡·next
+	10000000 == 1 -ã€‹next
 
 	11100000
-	01000000 == 1 -¡·next
+	01000000 == 1 -ã€‹next
 
 	11100000
-	00100000 == 1 -¡·next
+	00100000 == 1 -ã€‹next
 
 	11100000
-	00010000 == 0 -¡·ok
+	00010000 == 0 -ã€‹ok
 	*/
-	throw("error ×ÊÔ´²»×ã£¬²»¿É·ÖÅä");
-	return nullptr;//×ÊÔ´²»×ã£¬²»¿É·ÖÅä
+	throw("error èµ„æºä¸è¶³ï¼Œä¸å¯åˆ†é…");
+	return nullptr;//èµ„æºä¸è¶³ï¼Œä¸å¯åˆ†é…
 }
 
 void RmFromBitMap(File* bmap, int* rmList, int rmSize)
@@ -74,7 +74,7 @@ int FirstFit(File* bmap, BitmapOp bmo = BitmapOp::ReadOnly)
 					break;
 				}
 				case BitmapOp::Reverse: {
-					throw("error ¸ë");
+					throw("error é¸½");
 					break;
 				}
 				}
@@ -129,6 +129,6 @@ void AssignFile(inode* inodep)
 			return;
 		}
 	}
-	throw("error ¸ë");
+	throw("error é¸½");
 	//inodep->baseFile_id;
 }
