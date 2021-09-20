@@ -1,5 +1,5 @@
 //*后面的语言就是你Github错识别的语言，后面java修改成为你想要的显示的语言
-*.cpp linguist-language=c++
-*.h linguist-language=c++
-*.py linguist-language=python
+*.cpp linguist-language=c++;
+*.h linguist-language=c++;
+*.py linguist-language=python;
 
