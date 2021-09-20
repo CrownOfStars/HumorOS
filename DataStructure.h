@@ -43,8 +43,9 @@ std::string ParseDir(int dir_id, bool* end)
 		if (tempDir.aMap[i].Name[0])
 		{
 			value += tempDir.aMap[i].Name;
-			value += "\t\t";
+			value += "\t";
 			value += std::to_string(tempDir.aMap[i].inodeIndex);
+			//物理地址(起点?)\t保护码\t文件长度
 			value += "\n";
 		}
 		else
@@ -77,6 +78,11 @@ std::string ParseInodeFile(int inode_id)
 		}
 	}
 	return value;
+}
+
+void* pOffset(void* p,int offset)
+{
+	return (int*)(((ll)(p)) + ll(offset));
 }
 
 //std::string ParseBitmap(int bitmap_id)

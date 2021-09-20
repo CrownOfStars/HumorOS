@@ -1,25 +1,35 @@
 #pragma once
-#include "bit_quick.h"
 #include "DataStructure.h"
+
+unsigned char abit_quick[8]{
+	unsigned char(0b10000000),
+	unsigned char(0b11000000),
+	unsigned char(0b11100000),
+	unsigned char(0b11110000),
+	unsigned char(0b11111000),
+	unsigned char(0b11111100),
+	unsigned char(0b11111110),
+	unsigned char(0b11111111)
+};
 
 inode* curDirInode = new inode();
 
-int* FirstFit(File* bmap,int mapSize, int assignSize)//ç´¢å¼•åˆ†é…
+int* FirstFit(File* bmap,int mapSize, int assignSize)//Ë÷Òı·ÖÅä
 {
-	int* assignFile_id = new int[assignSize];//å°†è¦åˆ†é…çš„æ–‡ä»¶idçš„åˆ—è¡¨
-	int curAssigned = 0;//å½“å‰å·²åˆ†é…çš„é¡¹
-	for (int i = 0; i < mapSize; i++)//éå†å„ä½å›¾å—
+	int* assignFile_id = new int[assignSize];//½«Òª·ÖÅäµÄÎÄ¼şidµÄÁĞ±í
+	int curAssigned = 0;//µ±Ç°ÒÑ·ÖÅäµÄÏî
+	for (int i = 0; i < mapSize; i++)//±éÀú¸÷Î»Í¼¿é
 	{
 		for (int u = 0; u < 1024; u++)
 		{
-			for (int t = 0; t < 8; t++)//é€ä½æŸ¥æ‰¾
+			for (int t = 0; t < 8; t++)//ÖğÎ»²éÕÒ
 			{
-				if (!((*bmap)[u] & (abit_quick[0] >> t)))//å¦‚æœè¯¥ä½ä¸º0
+				if (!((*bmap)[u] & (abit_quick[0] >> t)))//Èç¹û¸ÃÎ»Îª0
 				{
-					(*bmap)[u] |= (abit_quick[0] >> t);//æŠŠè¯¥ä½è®¾ç½®ä¸º1
-					assignFile_id[curAssigned] = i*(1024*8)+u*8+t;//è®°å½•è¯¥ä½çš„ä½ç½®
+					(*bmap)[u] |= (abit_quick[0] >> t);//°Ñ¸ÃÎ»ÉèÖÃÎª1
+					assignFile_id[curAssigned] = i*(1024*8)+u*8+t;//¼ÇÂ¼¸ÃÎ»µÄÎ»ÖÃ
 					curAssigned++;
-					if (curAssigned == assignSize)//æ»¡è¶³æ¡ä»¶ï¼Œç»“æŸ
+					if (curAssigned == assignSize)//Âú×ãÌõ¼ş£¬½áÊø
 					{
 						return assignFile_id;
 					}
@@ -27,21 +37,21 @@ int* FirstFit(File* bmap,int mapSize, int assignSize)//ç´¢å¼•åˆ†é…
 			}
 		}
 	}
-	/* ä½è¿ç®—æ¼”ç¤º
+	/* Î»ÔËËãÑİÊ¾
 	11100000
-	10000000 == 1 -ã€‹next
+	10000000 == 1 -¡·next
 
 	11100000
-	01000000 == 1 -ã€‹next
+	01000000 == 1 -¡·next
 
 	11100000
-	00100000 == 1 -ã€‹next
+	00100000 == 1 -¡·next
 
 	11100000
-	00010000 == 0 -ã€‹ok
+	00010000 == 0 -¡·ok
 	*/
-	throw("error èµ„æºä¸è¶³ï¼Œä¸å¯åˆ†é…");
-	return nullptr;//èµ„æºä¸è¶³ï¼Œä¸å¯åˆ†é…
+	throw("error ×ÊÔ´²»×ã£¬²»¿É·ÖÅä");
+	return nullptr;//×ÊÔ´²»×ã£¬²»¿É·ÖÅä
 }
 
 void RmFromBitMap(File* bmap, int* rmList, int rmSize)
@@ -74,7 +84,7 @@ int FirstFit(File* bmap, BitmapOp bmo = BitmapOp::ReadOnly)
 					break;
 				}
 				case BitmapOp::Reverse: {
-					throw("error é¸½");
+					throw("error ¸ë");
 					break;
 				}
 				}
@@ -106,7 +116,7 @@ int AssignInode(inode* inodep)
 {
 	int inode_id = SearchInBitmap(inodeBitmap_head, inodeBitmapSize, BitmapOp::SetTrue);
 	int offset = inode_id % 16;
-	memcpy_s((inode_head+inode_id/16)[offset*64], 64, inodep, 64);
+	memcpy_s(pOffset(inode_head + inode_id / 16, offset * 64), 64, inodep, 64);
 	return inode_id;
 }
 
@@ -114,7 +124,7 @@ void RmInode(int inode_id)
 {
 	inode emp{ 0 };
 	int offset = inode_id % 16;
-	memcpy_s(inode_head[inode_id / 16] + offset * 64, 64, &emp, 64);
+	memcpy_s(pOffset(inode_head + inode_id / 16, offset * 64), 64, &emp, 64);
 	//SetBitmap(inodeBitmap_head, inode_id, false);
 }
 
@@ -129,6 +139,6 @@ void AssignFile(inode* inodep)
 			return;
 		}
 	}
-	throw("error é¸½");
+	throw("error ¸ë");
 	//inodep->baseFile_id;
 }

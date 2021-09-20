@@ -1,10 +1,10 @@
 #pragma once
 #include<deque>
-#include<vector>
 #include<string>
 typedef char Byte;
 
 using File = char[1024];
+using ll = long long;
 
 File* disk = nullptr;//操作磁盘的主要结构
 File* inode_head = nullptr;//i结点的起点
@@ -26,7 +26,9 @@ constexpr int fileSize = 101360;//dir file region 100*1024 - 1040
 constexpr int iNodeNum = 16 * 1024;
 constexpr int blockNum = 100 * 1024;
 
-std::vector<std::string> curPath;//保存当前所在的路径
+std::deque<std::pair<std::string, int>> pathDeque;//保存从根目录到当前目录之间的目录
+
+//std::vector<std::string> curPath;//保存当前所在的路径
 
 std::string userName = "shu";
 

@@ -7,7 +7,8 @@
 #include <map>
 #include <time.h>
 #include "Python.h"
-#include "disk_operator.h"
+#include <iomanip>
+#include "DiskOperator.h"
 
 
 SuperBlock supBlock;
@@ -45,13 +46,61 @@ int Info()
 
 int Cd()
 {
-	std::cout << ("this is cd command.\n");
-	return 0;
+	if (strcmp("..", _PyUnicode_AsString(argv)) == 0)
+	{
+		if (!pathDeque.empty())
+		{
+			pathDeque.pop_back();
+			if (!pathDeque.empty())
+			{
+				int inode_id = pathDeque.back().second;
+				int offset = inode_id % 16;
+				memcpy_s(curDirInode, 64, pOffset(inode_head + inode_id / 16, offset * 64), 64);
+			}
+			else
+			{
+				memcpy_s(curDirInode, 64, inode_head, 64);//root inode
+			}
+		}
+		return 0;
+	}
+	else if (strcmp("/", _PyUnicode_AsString(argv)) == 0)
+	{
+		pathDeque.clear();
+		memcpy_s(curDirInode, 64, inode_head, 64);//root inode
+		return 1;
+	}
+	for (int i = 0; i < 10; i++)
+	{
+		dirFile d{ 0 };
+		memcpy_s(&d, 1024, file_head[curDirInode->baseFile_id[i]], 1024);
+		for (int u = 0; u < 32; u++)
+		{
+			if (d.aMap[u].Name[0])
+			{
+				if (strcmp(d.aMap[u].Name, _PyUnicode_AsString(argv)) == 0)
+				{
+					int inode_id = d.aMap[u].inodeIndex;
+					int offset = (inode_id % 16)*64;
+					pathDeque.push_back(std::make_pair(_PyUnicode_AsString(argv), inode_id));
+					memcpy_s(curDirInode,64,pOffset(inode_head +inode_id / 16, offset), 64);
+					return u;
+				}
+			}
+			else
+			{
+				std::cout << "no such dictionary" << std::endl;
+				return false;
+			}
+		}
+	}
+	throw("鸽 error");
+	return NULL;
 }
 
 int Dir()
 {
-	std::string dirInfo = "filename\tinode\n";
+	std::string dirInfo = "文件名\t\t\t物理地址\t保护码\t文件长度\n";
 	bool endDir = false;
 	for (int i = 0; i < 10; i++)
 	{
@@ -132,21 +181,25 @@ int RmDir()
 
 int NewFile()
 {
+	std::cout << "this is newfile command\n";
 	return 0;
 }
 
 int Cat()
 {
+	std::cout << "this is cat command\n";
 	return 0;
 }
 
 int Copy()
 {
+	std::cout << "this is copy command\n";
 	return 0;
 }
 
 int Delete()
 {
+	std::cout << "this is delete command\n";
 	return 0;
 }
 
@@ -278,9 +331,9 @@ void InitDisk()
 void ShowCurPath()
 {
 	std::cout << userName << "@Humor/";
-	for (int u = 0; u < curPath.size(); u++)
+	for (auto i = pathDeque.begin(); i != pathDeque.end(); i++)
 	{
-		std::cout << curPath[u] << '/';
+		std::cout << (*i).first << '/';
 	}
 	std::cout << ">";
 }
@@ -295,7 +348,7 @@ void ExecuteBat(PyObject* batch)
 		{
 			mFuncPtr[_PyUnicode_AsString(PyTuple_GetItem(po, 0))]();
 		}
-		else if(PyObject_Size(po) == 2)
+		else if (PyObject_Size(po) == 2)
 		{
 			argv = PyTuple_GetItem(po, 1);
 			mFuncPtr[_PyUnicode_AsString(PyTuple_GetItem(po, 0))]();
