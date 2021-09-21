@@ -1,5 +1,6 @@
 #pragma once
 #include"constDefiner.h"
+#include<sstream>
 struct inode
 {
 	long long createTime = 0;//文件创建时间：unix时间戳 8byte
@@ -32,6 +33,24 @@ struct SuperBlock
 	Byte freeMem[1024 - 36]{ 0 };
 };
 
+
+std::string dec2hex(int i)
+{
+	std::stringstream ioss;     //定义字符串流
+	std::string s_temp;         //存放转化后字符
+	ioss << std::hex << i;      //以十六制形式输出
+	ioss >> s_temp;
+
+	if (5 > s_temp.size())
+	{
+		std::string s_0(5 - s_temp.size(), '0');      //位数不够则补0
+		s_temp = s_0 + s_temp;                            //合并
+	}
+
+	std::string s = s_temp.substr(s_temp.length() - 5, s_temp.length());    //取右width位
+	return "0x"+s;
+}
+
 std::string ParseDir(int dir_id, bool* end)
 {
 	std::string value = "";
@@ -40,12 +59,22 @@ std::string ParseDir(int dir_id, bool* end)
 
 	for (int i = 0; i < 32; i++)
 	{
-		if (tempDir.aMap[i].Name[0])
+		if (tempDir.aMap[i].Name[0] == '/')
 		{
+			value += "dir  ";
+			value += dec2hex(tempDir.aMap[i].inodeIndex);
+			value += "\t777\t";
+			value += "----\t";
+			value += tempDir.aMap[i].Name + 1;
+			value += "\n";
+		}
+		else if (tempDir.aMap[i].Name[0])
+		{
+			value += "file ";
+			value += dec2hex(tempDir.aMap[i].inodeIndex);
+			value += "\t777\t";
+			value += "----\t";
 			value += tempDir.aMap[i].Name;
-			value += "\t";
-			value += std::to_string(tempDir.aMap[i].inodeIndex);
-			//物理地址(起点?)\t保护码\t文件长度
 			value += "\n";
 		}
 		else

@@ -1,5 +1,5 @@
 from re import findall, fullmatch,search
-
+from tkinter import *
 
 argList = ["info","check",
            "dir","cd","md","rd","newfile","cat","del",
@@ -18,6 +18,7 @@ cd a/b/c/d =>
 md a/b/c/d =>
 [("cd","a"),("cd","b"),("cd","c"),("md","d")]
 """
+
 
 def Func():
     cmdline = input()#TODO: 添加对 含'/' ".." 特殊参数的支持,  
@@ -73,35 +74,75 @@ def Func():
             if fullmatch("(/[A-Za-z0-9]+)+",PATH):#绝对路径
                 bat = [("cd","/")]
                 path = findall("[A-Za-z0-9]+",PATH)
-                for item in path[:-1]:
-                    bat.append(("cd",item))
-                bat.append((res.group().lower(),item[-1]))
-                return bat
+                if len(path[-1]) < 27:
+                    for item in path[:-1]:
+                        bat.append(("cd",item))
+                    bat.append((res.group().lower(),"/"+path[-1]))
+                    return bat
+                else:
+                    return [("error","folder name too long\n")]
             elif fullmatch("([A-Za-z0-9]+[/])*[A-Za-z0-9]+",PATH):#相对路径
                 bat = []
                 path = findall("[A-Za-z0-9]+",PATH)
-                for item in path[:-1]:
-                    bat.append(("cd",item))
-                bat.append((res.group().lower(),path[-1]))
-                return bat
+                if len(path[-1]) < 27:
+                    for item in path[:-1]:
+                        bat.append(("cd",item))
+                    bat.append((res.group().lower(),"/"+path[-1]))
+                    return bat
+                else:
+                    return [("error","folder name too long\n")]
             else:
                 return [("error","invaild parameter\n")]
         elif res.group().lower() in argList[6:9]:
             PATH = cmdline[res.span()[1]:].strip()
-            if fullmatch("/home/([A-Za-z0-9]+/)*[A-Za-z0-9]+(.[A-Za-z0-9]+)?",PATH):#绝对路径
+            if fullmatch("/([A-Za-z0-9]+/)*[A-Za-z0-9]+(.[A-Za-z0-9]+)?",PATH):#绝对路径
                 bat = [("cd","/")]
                 path = findall("[A-Za-z0-9]+[.[A-Za-z0-9]+]?",PATH)
-                for item in path[:-1]:
-                    bat.append(("cd",item))
-                bat.append((res.group().lower(),[path[-1]]))
-                return bat
+                if len(path[-1]) < 28:
+                    for item in path[:-1]:
+                        bat.append(("cd",item))
+                    if res.group().lower() == "newfile":
+                        windows = Tk()
+                        windows.title("文本编辑——关闭或ctrl+s即提交")
+                        windows.geometry("500x300") #界面大小
+                        e = Text(windows,height=300,width=300,show=None)
+                        e.pack()
+                        def on_closing():
+                            f = open("cache","w")
+                            f.write(e.get("1.0","end")[:-1])
+                            f.close()
+                            windows.destroy()
+                        windows.bind_all('<Control-s>', on_closing)
+                        windows.protocol("WM_DELETE_WINDOW", on_closing)
+                        windows.mainloop()
+                    bat.append((res.group().lower()[:-1],[path[-1]]))
+                    return bat
+                else:
+                    return [("error","file name too long\n")]
             elif fullmatch("([A-Za-z0-9]+/)*[A-Za-z0-9]+(.[A-Za-z0-9]+)?",PATH):#相对路径
                 bat = []
                 path = findall("[A-Za-z0-9]+[.[A-Za-z0-9]+]?",PATH)
-                for item in path[:-1]:
-                    bat.append(("cd",item))
-                bat.append((res.group().lower(),path[-1]))
-                return bat
+                if len(path[-1]) < 28:
+                    for item in path[:-1]:
+                        bat.append(("cd",item))
+                    if res.group().lower() == "newfile":
+                        windows = Tk()
+                        windows.title("文本编辑——关闭或ctrl+s即提交")
+                        windows.geometry("500x300") #界面大小
+                        e = Text(windows,height=300,width=300,show=None)
+                        e.pack()
+                        def on_closing(arg=None):
+                            f = open("cache","w")
+                            f.write(e.get("1.0","end")[:-1])
+                            f.close()
+                            windows.destroy()
+                        windows.bind_all('<Control-s>', on_closing)
+                        windows.protocol("WM_DELETE_WINDOW", on_closing)
+                        windows.mainloop()
+                    bat.append((res.group().lower(),path[-1]))
+                    return bat
+                else:
+                    return [("error","file name too long\n")]
             else:
                 return [("error","invaild parameter\n")]
         elif res.group().lower() == "copy":    

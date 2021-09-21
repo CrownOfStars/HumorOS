@@ -12,7 +12,7 @@ unsigned char abit_quick[8]{
 	unsigned char(0b11111111)
 };
 
-inode* curDirInode = new inode();
+inode* curDirInode = nullptr;
 
 int* FirstFit(File* bmap,int mapSize, int assignSize)//Ë÷Òý·ÖÅä
 {

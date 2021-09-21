@@ -7,7 +7,6 @@
 #include <map>
 #include <time.h>
 #include "Python.h"
-#include <iomanip>
 #include "DiskOperator.h"
 
 
@@ -54,12 +53,12 @@ int Cd()
 			if (!pathDeque.empty())
 			{
 				int inode_id = pathDeque.back().second;
-				int offset = inode_id % 16;
-				memcpy_s(curDirInode, 64, pOffset(inode_head + inode_id / 16, offset * 64), 64);
+				int offset = (inode_id % 16) * 64;
+				curDirInode = (inode*)pOffset(inode_head + inode_id / 16, offset);
 			}
 			else
 			{
-				memcpy_s(curDirInode, 64, inode_head, 64);//root inode
+				curDirInode =  (inode*)inode_head;//root inode
 			}
 		}
 		return 0;
@@ -67,7 +66,7 @@ int Cd()
 	else if (strcmp("/", _PyUnicode_AsString(argv)) == 0)
 	{
 		pathDeque.clear();
-		memcpy_s(curDirInode, 64, inode_head, 64);//root inode
+		curDirInode = (inode*)inode_head;//root inode
 		return 1;
 	}
 	for (int i = 0; i < 10; i++)
@@ -76,16 +75,20 @@ int Cd()
 		memcpy_s(&d, 1024, file_head[curDirInode->baseFile_id[i]], 1024);
 		for (int u = 0; u < 32; u++)
 		{
-			if (d.aMap[u].Name[0])
+			if (d.aMap[u].Name[0] == '/')
 			{
-				if (strcmp(d.aMap[u].Name, _PyUnicode_AsString(argv)) == 0)
+				if (strcmp(d.aMap[u].Name + 1, _PyUnicode_AsString(argv)) == 0)
 				{
 					int inode_id = d.aMap[u].inodeIndex;
 					int offset = (inode_id % 16)*64;
 					pathDeque.push_back(std::make_pair(_PyUnicode_AsString(argv), inode_id));
-					memcpy_s(curDirInode,64,pOffset(inode_head +inode_id / 16, offset), 64);
+					curDirInode = (inode*)pOffset(inode_head +inode_id / 16, offset);
 					return u;
 				}
+			}
+			else if (d.aMap[u].Name[0])
+			{
+				continue;//this is a file name
 			}
 			else
 			{
@@ -100,7 +103,7 @@ int Cd()
 
 int Dir()
 {
-	std::string dirInfo = "文件名\t\t\t物理地址\t保护码\t文件长度\n";
+	std::string dirInfo = "类型 物理地址 保护码 文件大小\t文件名\n";
 	bool endDir = false;
 	for (int i = 0; i < 10; i++)
 	{
@@ -119,6 +122,78 @@ int Dir()
 }
 
 int MkDir()
+{
+	for (int i = 0; i < 10; i++)
+	{
+		dirFile d{ 0 };
+		memcpy_s(&d, 1024, file_head[curDirInode->baseFile_id[i]], 1024);
+		for (int u = 0; u < 32; u++)
+		{
+			if (d.aMap[u].Name[0] == '/')
+			{
+				if (strcmp(d.aMap[u].Name, _PyUnicode_AsString(argv)) == 0)
+				{
+					std::cout << ("dir already exists\n");
+					return NULL;
+				}
+			}
+			else if (d.aMap[u].Name[0])
+			{
+				continue;
+			}
+			else
+			{
+				inode newInode{ 0 };
+				time_t timep;
+				time(&timep);
+				newInode.createTime = timep;
+				newInode.mode_uid;//TODO
+				AssignFile(&newInode);
+				d.aMap[u].inodeIndex = AssignInode(&newInode);//TODO
+				strcpy_s(d.aMap[u].Name, _PyUnicode_AsString(argv));
+				memcpy_s(file_head[curDirInode->baseFile_id[i]], 1024, &d, 1024);
+				return false;
+			}
+		}
+	}
+	return NULL;
+}
+
+int RmDir()
+{
+	for (int i = 0; i < 10; i++)
+	{
+		dirFile d{ 0 };
+		memcpy_s(&d, 1024, file_head[curDirInode->baseFile_id[i]], 1024);
+		for (int u = 0; u < 32; u++)
+		{
+			if (d.aMap[u].Name[0] == '/')
+			{
+				if (strcmp(d.aMap[u].Name, _PyUnicode_AsString(argv)) == 0)
+				{
+					d.aMap[u].Name[0] = '\0';//rm dirinfo from parent dir
+					//d.aMap[u].inodeIndex//rm inode info from inodebitmap
+					//rm filebitmap
+					//TODO: rmfile will only rm inodebitmap and filebitmap
+					//TODO: dir command will judge if file exists by bitmap
+					//helpful to distingwish between file removed and block unused
+				}
+			}
+			else if (d.aMap[u].Name[0])
+			{
+				continue;
+			}
+			else
+			{
+				std::cout << ("no such dictionary\n");
+				return NULL;
+			}
+		}
+	}
+	return NULL;
+}
+
+int NewFile()
 {
 	for (int i = 0; i < 10; i++)
 	{
@@ -152,39 +227,6 @@ int MkDir()
 	return NULL;
 }
 
-int RmDir()
-{
-	for (int i = 0; i < 10; i++)
-	{
-		dirFile d{ 0 };
-		memcpy_s(&d, 1024, file_head[curDirInode->baseFile_id[i]], 1024);
-		for (int u = 0; u < 32; u++)
-		{
-			if (d.aMap[u].Name[0])
-			{
-				if (strcmp(d.aMap[u].Name, _PyUnicode_AsString(argv)) == 0)
-				{
-					d.aMap[u].Name[0] = '\0';//rm dirinfo from parent dir
-					//d.aMap[u].inodeIndex//rm inode info from inodebitmap
-					//rm filebitmap
-				}
-			}
-			else
-			{
-				std::cout << ("no such file or dictionary\n");
-				return NULL;
-			}
-		}
-	}
-	return NULL;
-}
-
-int NewFile()
-{
-	std::cout << "this is newfile command\n";
-	return 0;
-}
-
 int Cat()
 {
 	std::cout << "this is cat command\n";
@@ -199,8 +241,28 @@ int Copy()
 
 int Delete()
 {
-	std::cout << "this is delete command\n";
-	return 0;
+	for (int i = 0; i < 10; i++)
+	{
+		dirFile d{ 0 };
+		memcpy_s(&d, 1024, file_head[curDirInode->baseFile_id[i]], 1024);
+		for (int u = 0; u < 32; u++)
+		{
+			if (d.aMap[u].Name[0])
+			{
+				if (strcmp(d.aMap[u].Name, _PyUnicode_AsString(argv)) == 0)
+				{
+					//new rm method
+					return NULL;
+				}
+			}
+			else
+			{
+				std::cout << "no such file" << std::endl;
+				return false;
+			}
+		}
+	}
+	return NULL;
 }
 
 int Check()
@@ -262,7 +324,7 @@ void InitRootPath()
 	//home dir 是文件区的第一个dir file
 	AssignFile(&homeInode);
 	AssignInode(&homeInode);
-	memcpy_s(curDirInode, 64, &homeInode, 64);
+	curDirInode = (inode*)inode_head;
 }
 
 void InitCmdMapping()
