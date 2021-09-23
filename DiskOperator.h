@@ -1,5 +1,6 @@
 #pragma once
 #include "DataStructure.h"
+#include <fstream>
 
 unsigned char abit_quick[8]{
 	unsigned char(0b10000000),
@@ -12,7 +13,7 @@ unsigned char abit_quick[8]{
 	unsigned char(0b11111111)
 };
 
-inode* curDirInode = nullptr;
+inode* curInode = nullptr;
 
 int* FirstFit(File* bmap,int mapSize, int assignSize)//Ë÷Òý·ÖÅä
 {
@@ -133,12 +134,21 @@ void AssignFile(inode* inodep)
 	int file_id = SearchInBitmap(fileBitmap_head, blockBitmapSize, BitmapOp::SetTrue);
 	for (int i = 0;i < 10;i++)
 	{
-		if (!inodep->baseFile_id[i])
+		if (!inodep->file_id[i])
 		{
-			inodep->baseFile_id[i] = file_id;//
+			inodep->file_id[i] = file_id;//
 			return;
 		}
 	}
 	throw("error ¸ë");
-	//inodep->baseFile_id;
+	//inodep->file_id;
+}
+
+void createMigrateFile()
+{
+	std::fstream in("cache", std::ios::in);
+	std::istreambuf_iterator<char>beg(in), end;
+	std::string strdata(beg, end);
+	in.close();
+	//write strdata to virtual disk
 }

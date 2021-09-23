@@ -25,7 +25,7 @@ int getInodeId(inode* cur)
 {
 	if (cur->fileSize < 1024 * 10)
 	{
-		return cur->baseFile_id[cur->fileSize / 1024];
+		return cur->file_id[cur->fileSize / 1024];
 	}
 	else if (cur->fileSize < 1024 * 10 + 1024 / 4 * 1024)
 	{
@@ -45,48 +45,47 @@ int Info()
 
 int Cd()
 {
-	if (strcmp("..", _PyUnicode_AsString(argv)) == 0)
+	if (strcmp("..", _PyUnicode_AsString(argv)) == 0)//回到上一级目录
 	{
-		if (!pathDeque.empty())
+		if (!pathDeque.empty())//如果路径队列不为空
 		{
 			pathDeque.pop_back();
-			if (!pathDeque.empty())
+			if (!pathDeque.empty())//回到父目录的i结点
 			{
-				int inode_id = pathDeque.back().second;
-				int offset = (inode_id % 16) * 64;
-				curDirInode = (inode*)pOffset(inode_head + inode_id / 16, offset);
+				int inode_id = pathDeque.back().second;//为了代码更好看，优化交给编译器
+				diskPointer<inode*>(0, inode_id, curInode, inode_head);
 			}
-			else
+			else//如果回到根结点
 			{
-				curDirInode =  (inode*)inode_head;//root inode
+				diskPointer<inode*>(0, 0, curInode, inode_head);//回到根目录的i结点
 			}
 		}
 		return 0;
 	}
-	else if (strcmp("/", _PyUnicode_AsString(argv)) == 0)
+	else if (strcmp("/", _PyUnicode_AsString(argv)) == 0)//回到根目录
 	{
 		pathDeque.clear();
-		curDirInode = (inode*)inode_head;//root inode
-		return 1;
+		diskPointer<inode*>(0, 0, curInode, inode_head);//回到根目录的i结点
+		return 0;
 	}
+
+	dirFile* pdirF = nullptr;
 	for (int i = 0; i < 10; i++)
 	{
-		dirFile d{ 0 };
-		memcpy_s(&d, 1024, file_head[curDirInode->baseFile_id[i]], 1024);
+		diskPointer<dirFile*>(curInode->file_id[i], 0, pdirF, file_head);
 		for (int u = 0; u < 32; u++)
 		{
-			if (d.aMap[u].Name[0] == '/')
+			if (pdirF->aMap[u].Name[0] == '/')
 			{
-				if (strcmp(d.aMap[u].Name + 1, _PyUnicode_AsString(argv)) == 0)
+				if (strcmp(pdirF->aMap[u].Name + 1, _PyUnicode_AsString(argv)) == 0)
 				{
-					int inode_id = d.aMap[u].inodeIndex;
-					int offset = (inode_id % 16)*64;
+					int inode_id = pdirF->aMap[u].inodeIndex; //为了代码更好看，优化交给编译器
 					pathDeque.push_back(std::make_pair(_PyUnicode_AsString(argv), inode_id));
-					curDirInode = (inode*)pOffset(inode_head +inode_id / 16, offset);
+					diskPointer<inode*>(0, inode_id, curInode, inode_head);
 					return u;
 				}
 			}
-			else if (d.aMap[u].Name[0])
+			else if (pdirF->aMap[u].Name[0])
 			{
 				continue;//this is a file name
 			}
@@ -103,60 +102,123 @@ int Cd()
 
 int Dir()
 {
-	std::string dirInfo = "类型 物理地址 保护码 文件大小\t文件名\n";
-	bool endDir = false;
+	std::cout << "类型 物理地址 保护码 文件大小\t文件名\n";
+	dirFile* pdirF = nullptr;
 	for (int i = 0; i < 10; i++)
 	{
-		dirInfo += ParseDir(curDirInode->baseFile_id[i], &endDir);
-		if (endDir)
+		diskPointer<dirFile*>(curInode->file_id[i], 0, pdirF, file_head);
+		for (int u = 0; u < 32; u++)
 		{
-			std::cout << dirInfo.c_str();
-			return NULL;
+			if (pdirF->aMap[u].Name && pdirF->aMap[u].inodeIndex != 0)
+			{
+				std::cout << inodeInfo(pdirF->aMap[u].Name[0], pdirF->aMap[u].inodeIndex);
+				std::cout << pdirF->aMap[0].Name + 1 << std::endl;//文件存在,获取文件信息
+			}
+			else if (!pdirF->aMap[u].Name)
+			{
+				return;//遍历到未创建过文件的区域，终止遍历
+			}
 		}
 	}
+	throw("error 鸽");
 	//TODO: Search in
-	//curDirInode->singleIndex_id;
-	//curDirInode->doubleIndex;
-	std::cout << (dirInfo.c_str());
+	//curInode->singleIndex_id;
+	//curInode->doubleIndex;
 	return NULL;
 }
 
 int MkDir()
 {
-	for (int i = 0; i < 10; i++)
+	//TODO: 考虑到本来就是连续进行分配，可以不用执行多重循环,用指针遍历到循环条件终止为止
+	//定义文件夹的filesize——从第一个数据块开始编号为0,按照理论上遍历的顺序逐个+1
+	if (curInode->fileSize < 10 * 32)
 	{
-		dirFile d{ 0 };
-		memcpy_s(&d, 1024, file_head[curDirInode->baseFile_id[i]], 1024);
-		for (int u = 0; u < 32; u++)
+		dirFile* pdirF = nullptr;
+		for (int i = 0; i < 10; i++)
 		{
-			if (d.aMap[u].Name[0] == '/')
+			diskPointer<dirFile*>(curInode->file_id[i], 0, pdirF, file_head);
+			for (int u = 0; u < 32; u++)
 			{
-				if (strcmp(d.aMap[u].Name, _PyUnicode_AsString(argv)) == 0)
+				
+			}
+		}
+		
+		int nextFree = -1;
+		for (int i = 0; i < 10; i++)
+		{
+			for (int u = 0; u < 32; u++)
+			{
+				if (pdirF->aMap[u].inodeIndex > 0)
 				{
-					std::cout << ("dir already exists\n");
-					return NULL;
+					if (pdirF->aMap[u].Name[0] == '/')
+					{
+						if (strcmp(pdirF->aMap[u].Name + 1, _PyUnicode_AsString(argv)) == 0)
+						{
+							std::cout << ("dir already exists\n");
+							return -1;
+						}
+					}
 				}
-			}
-			else if (d.aMap[u].Name[0])
-			{
-				continue;
-			}
-			else
-			{
-				inode newInode{ 0 };
-				time_t timep;
-				time(&timep);
-				newInode.createTime = timep;
-				newInode.mode_uid;//TODO
-				AssignFile(&newInode);
-				d.aMap[u].inodeIndex = AssignInode(&newInode);//TODO
-				strcpy_s(d.aMap[u].Name, _PyUnicode_AsString(argv));
-				memcpy_s(file_head[curDirInode->baseFile_id[i]], 1024, &d, 1024);
-				return false;
+				else if(pdirF->aMap[u].inodeIndex == -1)
+				{
+					//ready to find next free pos
+				}
+				else
+				{
+					//TODO:把filesize处inode的设置为-1,方便遍历时找next filesize
+					int disk_id = curInode->fileSize / 10;
+					int offset = curInode->fileSize % 10;
+					inodeMap* imap = nullptr;
+					diskPointer<inodeMap*>(curInode->file_id[disk_id], offset, imap, file_head);
+					strcpy_s(imap->Name, _PyUnicode_AsString(argv));
+					//imap->inodeIndex = AssignInode()
+					//end of dir
+					//ready to 
+					//ready to refresh next free pos
+				}
 			}
 		}
 	}
-	return NULL;
+	else
+	{
+		throw("error 鸽");
+	}
+	//inodeMap* p = nullptr;
+	//bool end = false;
+	//for (int i = 0; i < 10; i++)
+	//{
+	//	dirFile d{ 0 };
+	//	memcpy_s(&d, 1024, file_head[curInode->file_id[i]], 1024);
+	//	for (int u = 0; u < 32; u++)
+	//	{
+	//		if (d.aMap[u].Name[0] == '/' and d.aMap[u].inodeIndex != 0)
+	//		{
+	//			if (strcmp(d.aMap[u].Name, _PyUnicode_AsString(argv)) == 0)
+	//			{
+	//				std::cout << ("dir already exists\n");
+	//				return NULL;
+	//			}
+	//		}
+	//		else if (!p)
+	//		{
+	//			p = (inodeMap*)d.aMap[u].Name[0];
+	//		}
+	//		if (!d.aMap[u].Name[0])
+	//		{
+	//			inode newInode{ 0 };
+	//			time_t timep;
+	//			time(&timep);
+	//			newInode.createTime = timep;
+	//			newInode.mode_uid;//TODO
+	//			AssignFile(&newInode);
+	//			d.aMap[u].inodeIndex = AssignInode(&newInode);//TODO
+	//			strcpy_s(d.aMap[u].Name, _PyUnicode_AsString(argv));
+	//			memcpy_s(file_head[curInode->file_id[i]], 1024, &d, 1024);
+	//			return false;
+	//		}
+	//	}
+	//}
+	//return NULL;
 }
 
 int RmDir()
@@ -164,7 +226,7 @@ int RmDir()
 	for (int i = 0; i < 10; i++)
 	{
 		dirFile d{ 0 };
-		memcpy_s(&d, 1024, file_head[curDirInode->baseFile_id[i]], 1024);
+		memcpy_s(&d, 1024, file_head[curInode->file_id[i]], 1024);
 		for (int u = 0; u < 32; u++)
 		{
 			if (d.aMap[u].Name[0] == '/')
@@ -198,7 +260,7 @@ int NewFile()
 	for (int i = 0; i < 10; i++)
 	{
 		dirFile d{ 0 };
-		memcpy_s(&d, 1024, file_head[curDirInode->baseFile_id[i]], 1024);
+		memcpy_s(&d, 1024, file_head[curInode->file_id[i]], 1024);
 		for (int u = 0; u < 32; u++)
 		{
 			if (d.aMap[u].Name[0])
@@ -219,7 +281,7 @@ int NewFile()
 				AssignFile(&newInode);
 				d.aMap[u].inodeIndex = AssignInode(&newInode);//TODO
 				strcpy_s(d.aMap[u].Name, _PyUnicode_AsString(argv));
-				memcpy_s(file_head[curDirInode->baseFile_id[i]], 1024, &d, 1024);
+				memcpy_s(file_head[curInode->file_id[i]], 1024, &d, 1024);
 				return false;
 			}
 		}
@@ -244,7 +306,7 @@ int Delete()
 	for (int i = 0; i < 10; i++)
 	{
 		dirFile d{ 0 };
-		memcpy_s(&d, 1024, file_head[curDirInode->baseFile_id[i]], 1024);
+		memcpy_s(&d, 1024, file_head[curInode->file_id[i]], 1024);
 		for (int u = 0; u < 32; u++)
 		{
 			if (d.aMap[u].Name[0])
@@ -267,46 +329,7 @@ int Delete()
 
 int Check()
 {
-	std::string cmd;
-	while (std::cin >> cmd)
-	{
-		if (cmd == "inode")
-		{
-			std::cout << "inode file id>";
-			int inode_file_id;
-			std::cin >> inode_file_id;
-			std::cout << ParseInodeFile(inode_file_id);
-		}
-		else if (cmd == "bitmap")
-		{
-			std::cout << "bitmap file id>";
-			int bitmap_file_id;
-			std::cin >> bitmap_file_id;
-			//std::cout << ParseBitmap(bitmap_file_id);
-		}
-	}
-
-	/*std::string s;
-	cin >> s;
-	if (s == "inodebitmap")
-	{
-		int idx;
-		cin >> idx;
-		std::cout << disk[idx];
-	}
-	else if(s == "filebitmap")
-	{
-		int idx;
-		cin >> idx;
-		std::cout << disk[idx];
-	}*/
-	for (int i = 0; i < 1024 * 100; i++)
-	{
-		if (disk[i][0])
-		{
-			std::cout << i << '\n';
-		}
-	}
+	std::cout << "this is a check command\n";
 	return NULL;
 }
 
@@ -324,7 +347,7 @@ void InitRootPath()
 	//home dir 是文件区的第一个dir file
 	AssignFile(&homeInode);
 	AssignInode(&homeInode);
-	curDirInode = (inode*)inode_head;
+	curInode = (inode*)inode_head;
 }
 
 void InitCmdMapping()
@@ -437,9 +460,6 @@ int main()
 		ExecuteBat(PyEval_CallObject(pFunc, NULL));
 	}
 	Py_Finalize();
-	for (int i = 0; i < 102400; i++)
-	{
-		delete[] & disk[i];
-	}
+	delete[] disk;
 	return 0;
 }

@@ -5,11 +5,10 @@ struct inode
 {
 	long long createTime = 0;//文件创建时间：unix时间戳 8byte
 	int mode_uid = 0;//文件属性以及文件所属者 4byte
-	int fileSize = 0;//文件大小 4byte
-	//文件索引指针
-	int baseFile_id[10]{ 0 }; //10*4byte 包含320个文件夹或文件
-	int singleIndex_id = 0;
-	int doubleIndex_id = 0;
+	int fileSize = 0;//文件大小 4byte,在文件夹中作为首个可以mkdir的位置
+	int file_id[10]{ 0 }; //10*4byte 包含320个文件夹或文件
+	int singleIndex_id = 0;//一级文件索引
+	int doubleIndex_id = 0;//二级文件索引
 };//sum: 64 byte
 
 struct inodeMap
@@ -51,40 +50,50 @@ std::string dec2hex(int i)
 	return "0x"+s;
 }
 
-std::string ParseDir(int dir_id, bool* end)
+void TraversalDir(inode* inodep)//遍历目录
 {
-	std::string value = "";
-	dirFile tempDir{ 0 };
-	memcpy_s(&tempDir, 1024, file_head[dir_id], 1024);
-
-	for (int i = 0; i < 32; i++)
+	//只要inode的数值为0，即代表可以被分配
+	//删除时需要将父目录dir文件中的inode号设置为0,分配出去的file与inode也要被收回(从bitmap上
+	for (int i = 0; i < 10; i++)
 	{
-		if (tempDir.aMap[i].Name[0] == '/')
+		dirFile* p = (dirFile*)&file_head[inodep->file_id[i]];//将实际的物理块作为dir读取
+		if (p->aMap[0].Name && p->aMap[0].inodeIndex != 0)
 		{
-			value += "dir  ";
-			value += dec2hex(tempDir.aMap[i].inodeIndex);
-			value += "\t777\t";
-			value += "----\t";
-			value += tempDir.aMap[i].Name + 1;
-			value += "\n";
+			//this is a exist file
 		}
-		else if (tempDir.aMap[i].Name[0])
+		else if (p->aMap[0].Name && p->aMap[0].inodeIndex == 0)
 		{
-			value += "file ";
-			value += dec2hex(tempDir.aMap[i].inodeIndex);
-			value += "\t777\t";
-			value += "----\t";
-			value += tempDir.aMap[i].Name;
-			value += "\n";
+			//this is a removed file
 		}
 		else
 		{
-			*end = true;
-			break;
+			//this block is never used
 		}
+	}
+}
+
+std::string inodeInfo(char fileType,int inode_id)
+{
+	std::string value;
+	if (fileType == '/')
+	{
+		value += "dir  ";
+		inode* inodep = (inode*)inode_head[0];
+		value += dec2hex(inodep->file_id[0]) + "\t";//文件索引分配，以第一个文件块作为物理地址
+		value += std::to_string(inodep->mode_uid) + "\t";
+		value += "--\t";
+	}
+	else
+	{
+		value += "file ";
+		inode* inodep = (inode*)inode_head[0];
+		value += dec2hex(inodep->file_id[0]) + "\t";//文件索引分配，以第一个文件块作为物理地址
+		value += std::to_string(inodep->mode_uid) + "\t";
+		value += std::to_string(inodep->fileSize) + "\t";
 	}
 	return value;
 }
+
 
 std::string ParseInodeFile(int inode_id)
 {
@@ -101,7 +110,7 @@ std::string ParseInodeFile(int inode_id)
 			value += "\n";
 			for (int u = 0; u < 10; u++)
 			{
-				value += std::to_string(inodetemp.baseFile_id[u]);
+				value += std::to_string(inodetemp.file_id[u]);
 				value += "\n";
 			}
 		}
@@ -114,6 +123,16 @@ void* pOffset(void* p,int offset)
 	return (int*)(((ll)(p)) + ll(offset));
 }
 
+template<typename T>
+void diskPointer(int disk_id, int offset,T pointer,File* p = disk)
+{
+	pointer = (T)(p + disk_id)+offset;
+}
+
+void getInodeByIndex(int inode_id,inode* p)
+{
+	p = (inode*)(inode_head)+inode_id;
+}
 //std::string ParseBitmap(int bitmap_id)
 //{
 //	std::string value;
