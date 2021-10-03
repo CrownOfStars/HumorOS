@@ -47,8 +47,8 @@ def Func():
                     bat.append(("cd",item))
                 bat.append((res.group().lower(),))
                 return bat
-            elif PATH == "/s":
-                return [(res.group().lower(),"-s")]
+            elif PATH == "-r":
+                return [(res.group().lower()+"-r","")]
             else:
                 return [("error","parameters number not match\n")]
         elif res.group().lower() == "cd":

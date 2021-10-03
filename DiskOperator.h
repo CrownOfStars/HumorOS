@@ -34,7 +34,7 @@ struct inode
 	void init();
 	long long createTime = 0ll;//文件创建时间：unix时间戳 8byte
 	int mode_uid = 0;//文件属性以及文件所属者 4byte
-	int fileSize = 0;//文件大小 4byte
+	int fileSize = 0;//实际可用的文件数量 4byte
 	int file_id[10]{ 0 }; //10*4byte 包含320个文件夹或文件
 	int singleIndex = 0;//一级文件索引
 	int doubleIndex = 0;//二级文件索引
@@ -65,6 +65,7 @@ struct inode
 		return 10;
 	}
 	dirFile* getDir();
+	char* getFile();
 	void addDir(inodeMap* imapp);
 	void clearDir();
 };//sum: 64 byte
@@ -79,6 +80,98 @@ struct dirFile
 {
 	inodeMap aMap[32];//一个目录包含1024/32=32个文件-i结点/文件夹-i结点映射
 };//sum: 1k
+
+inode* curInode = new inode();
+
+std::string inodeInfo(char fileType, int inode_id)
+{
+	std::string value;
+	inode* inodep = new inode{ 0 };
+	if (fileType == '/')
+	{
+		value += "dir  ";
+		virtualDiskReader<inode>(inodep, inodeStart, 0, inode_id);
+		value += dec2hex(inodep->file_id[0]) + "\t";//文件索引分配，以第一个文件块作为物理地址
+		value += std::to_string(inodep->mode_uid) + "\t";
+		value += "--\t";
+	}
+	else
+	{
+		value += "file ";
+		virtualDiskReader<inode>(inodep, inodeStart, 0, inode_id);
+		value += dec2hex(inodep->file_id[0]) + "\t";//文件索引分配，以第一个文件块作为物理地址
+		value += std::to_string(inodep->mode_uid) + "\t";
+		value += std::to_string(inodep->fileSize) + "\t";
+	}
+	delete inodep;
+	return value;
+}
+
+
+void PrintDFS(int blankNum) {
+	dirFile* pdirF = curInode->getDir();
+	for (int i = 0; i < curInode->dirSize(); i++)
+	{
+		for (int u = 0; u < 32; u++)
+		{
+			if (pdirF[i].aMap[u].Name[0] == '/')
+			{
+				inode* p = curInode;
+				virtualDiskReader<inode>(curInode,inodeStart,0, pdirF[i].aMap[u].inodeId);
+				std::cout << std::string(blankNum*4, ' ') << inodeInfo(pdirF[i].aMap[u].Name[0], pdirF[i].aMap[u].inodeId) <<  pdirF[i].aMap[u].Name + 1 << std::endl;
+				PrintDFS(blankNum+1);
+				curInode = p;
+			}
+			else if (pdirF[i].aMap[u].Name[0] == '-')
+			{
+				continue;
+			}
+			else if (pdirF[i].aMap[u].Name[0])
+			{
+				std::cout << std::string(blankNum*4, ' ') << inodeInfo(pdirF[i].aMap[u].Name[0], pdirF[i].aMap[u].inodeId) << pdirF[i].aMap[u].Name << std::endl;
+				return;
+			}
+			else
+			{
+				return;
+			}
+		}
+	}
+}
+
+void RemoveDFS()
+{
+	dirFile* pdir = curInode->getDir();
+	for (int i = 0; i < curInode->dirSize(); i++)
+	{
+		for (int u = 0; u < 32; u++)
+		{
+			if (pdir[i].aMap[u].Name[0] == '/')
+			{
+				inode* p = curInode;
+				virtualDiskReader<inode>(curInode, inodeStart, 0, pdir[i].aMap[u].inodeId);
+				RemoveDFS();
+				//remove
+				curInode = p;
+				return;
+			}
+			else if (pdir[i].aMap[u].Name[0] == '-')
+			{
+				continue;
+			}
+			else if (pdir[i].aMap[u].Name[0])
+			{
+				//remove
+				//std::cout << std::string(blankNum, ' ') << pdir[i].aMap[u].Name;
+				return;
+			}
+			else
+			{
+				return;
+			}
+		}
+	}
+}
 
 struct SuperBlock
 {
@@ -207,6 +300,12 @@ void RmInode(int* rmList, int rmSize)//只需要在位图中移除即可？
 	}
 }
 
+int SearchInIndex(int inode_id)
+{
+	return 0;
+}
+
+
 int AssignFile()
 {
 	int file_id = lastFreeFile;
@@ -215,38 +314,6 @@ int AssignFile()
 	return file_id;
 }
 
-void createMigrateFile()
-{
-	std::fstream in("cache", std::ios::in);
-	std::istreambuf_iterator<char>beg(in), end;
-	std::string strdata(beg, end);
-	in.close();
-	//write strdata to virtual disk
-}
-
-std::string inodeInfo(char fileType, int inode_id)
-{
-	std::string value;
-	inode* inodep = new inode{ 0 };
-	if (fileType == '/')
-	{
-		value += "dir  ";
-		virtualDiskReader<inode>(inodep, inodeStart, 0, inode_id);
-		value += dec2hex(inodep->file_id[0]) + "\t";//文件索引分配，以第一个文件块作为物理地址
-		value += std::to_string(inodep->mode_uid) + "\t";
-		value += "--\t";
-	}
-	else
-	{
-		value += "file ";
-		virtualDiskReader<inode>(inodep, inodeStart, 0, inode_id);
-		value += dec2hex(inodep->file_id[0]) + "\t";//文件索引分配，以第一个文件块作为物理地址
-		value += std::to_string(inodep->mode_uid) + "\t";
-		value += std::to_string(inodep->fileSize) + "\t";
-	}
-	delete inodep;
-	return value;
-}
 
 void PrintBitmap(int bmid, int type = fileBmStart)
 {
@@ -264,10 +331,18 @@ void PrintBitmap(int bmid, int type = fileBmStart)
 	}
 }
 
+void DirFileTrim(dirFile* pdirF,int dirSize)
+{
+	//当目录满的时候,紧缩掉被移除的目录
+
+}
+
+/*
 void* pOffset(void* p, int offset)
 {
 	return (int*)(((ll)(p)) + ll(offset));
 }
+*/
 
 template<typename T>
 void diskPointer(int disk_id, int offset, T* pointer, File* p = disk)
@@ -286,12 +361,23 @@ void inode::init()
 dirFile* inode::getDir() {
 
 	dirFile* dirFp = new dirFile[dirSize()];
-
 	for (int u = 0; u < dirSize(); u++)
 	{
 		virtualDiskReader<dirFile>(dirFp + u, fileStart, file_id[u], 0);
 	}
 	return dirFp;
+}
+
+char* inode::getFile()
+{
+	File file;
+	char* filep = new char[dirSize() * 1024];
+	for (int u = 0; u < dirSize(); u++)
+	{
+		virtualDiskReader<File>(&file, fileStart, file_id[u], 0);
+		memcpy_s(filep + u * 1024, 1024, file, 1024);
+	}
+	return filep;
 }
 
 void inode::addDir(inodeMap* imapp)
@@ -343,8 +429,6 @@ void inode::clearDir()
 		}
 	}
 }
-
-inode* curInode = new inode();
 
 //int* FirstFit(File* bmap, int mapSize, int assignSize)//索引分配
 //{

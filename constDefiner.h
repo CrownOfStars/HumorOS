@@ -62,3 +62,10 @@ std::string dec2hex(int i)
 	std::string s = s_temp.substr(s_temp.length() - 5, s_temp.length());    //取右width位
 	return "0x" + s;
 }
+
+std::string fileSizeAlign(int fileSize)
+{
+	std::string value;
+	return value;
+	//TODO:将文件的大小对齐输出，避免\t的干扰
+}

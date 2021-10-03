@@ -11,12 +11,6 @@ PyObject* argv = nullptr;
 
 std::map<std::string, int(*)()> mFuncPtr;
 
-
-int SearchInIndex(int inode_id)
-{
-	return 0;
-}
-
 int Info()
 {
 	std::cout << ("this is info command.\n");
@@ -88,19 +82,34 @@ int Dir()
 	{
 		for (int u = 0; u < 32; u++)
 		{
-			if (pdirF->aMap[u].Name[0])
+			if (pdirF[i].aMap[u].Name[0] == '/')
 			{
-				std::cout << inodeInfo(pdirF->aMap[u].Name[0], pdirF->aMap[u].inodeId);
-				std::cout << pdirF->aMap[u].Name + 1 << std::endl;//文件存在,获取文件信息
+				std::cout << inodeInfo(pdirF[i].aMap[u].Name[0], pdirF[i].aMap[u].inodeId);
+				std::cout << pdirF[i].aMap[u].Name + 1 << std::endl;//文件存在,获取文件信息
 			}
-			else if (!pdirF->aMap[u].Name[0])
+			else if (pdirF[i].aMap[u].Name[0] == '-')
+			{
+				continue;
+			}
+			else if (!pdirF[i].aMap[u].Name[0])
 			{
 				std::cout << "\n";
 				return 0;//遍历到未创建过文件的区域，终止遍历
 			}
+			else
+			{
+				std::cout << inodeInfo(pdirF[i].aMap[u].Name[0], pdirF[i].aMap[u].inodeId);
+				std::cout << pdirF[i].aMap[u].Name << std::endl;//文件存在,获取文件信息
+			}
 		}
 	}
 	std::cout << "\n";
+	return 0;
+}
+
+int Dir_r()
+{
+	PrintDFS(0);
 	return 0;
 }
 
@@ -116,7 +125,7 @@ int MkDir()
 			{
 				std::cout << "dir already exists\n";
 				delete imapp;
-				delete dirF;
+				delete[] dirF;
 				return -1;
 			}
 			else if (dirF[i].aMap[u].Name[0] == '-')//removed dir
@@ -152,24 +161,24 @@ int RmDir()
 		virtualDiskReader<dirFile>(pdirF, fileStart, curInode->file(i), 0);
 		for (int u = 0; u < 32; u++)
 		{
-			if (pdirF->aMap[u].Name[0] == '/')
+			if (pdirF[i].aMap[u].Name[0] == '/')
 			{
-				if (strcmp(pdirF->aMap[u].Name + 1, _PyUnicode_AsString(argv)) == 0)
+				if (strcmp(pdirF[i].aMap[u].Name + 1, _PyUnicode_AsString(argv)) == 0)
 				{
-					pdirF->aMap[u].Name[0] = '\0';
+					pdirF[i].aMap[u].Name[0] = '-';
 					if (curInode->fileSize > i * 32 + u)
 					{
 						curInode->fileSize = i * 32 + u;
 					}
 					//rm dirinfo from parent dir
-					//pdirF->aMap[u].inodeIndex//rm inode info from inodebitmap
+					//pdirF[i].aMap[u].inodeIndex//rm inode info from inodebitmap
 					//rm filebitmap
 					//TODO: rmfile will only rm inodebitmap and filebitmap
 					//TODO: dir command will judge if file exists by bitmap
 					//helpful to distingwish between file removed and block unused
 				}
 			}
-			else if (pdirF->aMap[u].Name[0])
+			else if (pdirF[i].aMap[u].Name[0])
 			{
 				continue;
 			}
@@ -185,44 +194,75 @@ int RmDir()
 
 int NewFile()
 {
-	dirFile* pdirF = new dirFile();
-	for (int i = 0; i < curInode->fileSize; i++)
+	dirFile* pdirF = curInode->getDir();
+	inodeMap* imapp = new inodeMap();
+	for (int i = 0; i < curInode->dirSize(); i++)
 	{
-		virtualDiskReader<dirFile>(pdirF, fileStart, curInode->file(i), 0);
 		for (int u = 0; u < 32; u++)
 		{
-			if (pdirF->aMap[u].Name[0])
+			if (strcmp(pdirF[i].aMap[u].Name , _PyUnicode_AsString(argv)) == 0)
 			{
-				if (strcmp(pdirF->aMap[u].Name, _PyUnicode_AsString(argv)) == 0)
+				std::cout << "file already exists" << std::endl;
+				delete[] pdirF;
+				return 0;
+			}
+			else if (pdirF[i].aMap[u].Name[0] == '-')//removed dir
+			{
+				if (!imapp)//把写指针定位到此处
 				{
-					std::cout << ("file already exists\n");
-					return NULL;
+					imapp = pdirF[i].aMap + u;
 				}
 			}
-			else
+			else if (!pdirF[i].aMap[u].Name[0])
 			{
-				inode newInode;
-				time_t timep;
-				time(&timep);
-				newInode.createTime = timep;
-				newInode.mode_uid;//TODO
-				/*
-				AssignFile(&newInode);
-				pdirF->aMap[u].inodeIndex = AssignInode(&newInode);//TODO
-				strcpy_s(pdirF->aMap[u].Name, _PyUnicode_AsString(argv));
-				memcpy_s(file_head[curInode->file_id[i]], 1024, &d, 1024);
-				*/
-				return false;
+				imapp->inodeId = lastFreeInode;
+				strcpy_s(imapp->Name, _PyUnicode_AsString(argv));//更新当前目录下的索引表
+				AssignInode();//写入到位图中，更新i结点区,为刚刚建立的i结点分配空文件
+				std::ifstream in("cache", std::ios::binary);
+				std::istreambuf_iterator<char>beg(in), end;
+				std::string strdata(beg, end);
+				in.close();
+				
+				//AssignFile();
+				curInode->addDir(imapp);
+				delete imapp;
+				delete[] pdirF;
+				return 0;
 			}
 		}
 	}
+	delete[] pdirF;
 	return NULL;
 }
 
 int Cat()
 {
-	std::cout << "this is cat command\n";
-	return 0;
+	dirFile* pdirF = curInode->getDir();
+	for (int i = 0; i < curInode->dirSize(); i++)
+	{
+		for (int u = 0; u < 32; u++)
+		{
+			if (strcmp(pdirF[i].aMap[u].Name, _PyUnicode_AsString(argv)) == 0)
+			{
+				inode* inodep = new inode();
+				virtualDiskReader<inode>(inodep, inodeStart, 0, pdirF[i].aMap[u].inodeId);
+				char* fileContent = inodep->getFile();
+				std::cout << fileContent << std::endl;
+				delete[] fileContent;
+				delete[] pdirF;
+				return 0;
+			}
+			else if (!pdirF[i].aMap[u].Name[0])
+			{
+				std::cout << "no such file" << std::endl;
+				delete[] pdirF;
+				return 0;
+			}
+		}
+	}
+	std::cout << "WARNING: Unexpected situation: No space left" << std::endl;
+	delete[] pdirF;
+	return NULL;
 }
 
 int Copy()
@@ -233,27 +273,30 @@ int Copy()
 
 int Delete()
 {
-	//for (int i = 0; i < 10; i++)
-	//{
-	//	dirFile d{ 0 };
-	//	memcpy_s(&d, 1024, file_head[curInode->file_id[i]], 1024);
-	//	for (int u = 0; u < 32; u++)
-	//	{
-	//		if (d.aMap[u].Name[0])
-	//		{
-	//			if (strcmp(d.aMap[u].Name, _PyUnicode_AsString(argv)) == 0)
-	//			{
-	//				//new rm method
-	//				return NULL;
-	//			}
-	//		}
-	//		else
-	//		{
-	//			std::cout << "no such file" << std::endl;
-	//			return false;
-	//		}
-	//	}
-	//}
+	dirFile* pdirF = curInode->getDir();
+	for (int i = 0; i < curInode->dirSize(); i++)
+	{
+		for (int u = 0; u < 32; u++)
+		{
+			if (strcmp(pdirF[i].aMap[u].Name , _PyUnicode_AsString(argv)) == 0)
+			{
+				pdirF[i].aMap[u].Name[0] = '-';
+				//TODO:calculte the filesize
+				//rm dirinfo from parent dir
+				//pdirF[i].aMap[u].inodeIndex//rm inode info from inodebitmap
+				//rm filebitmap
+				//TODO: rmfile will only rm inodebitmap and filebitmap
+				//TODO: dir command will judge if file exists by bitmap
+				//helpful to distingwish between file removed and block unused
+			}
+			else if(!pdirF[i].aMap[u].Name[0])
+			{
+				std::cout << "no such file" << std::endl;
+				delete[] pdirF;
+				return NULL;
+			}
+		}
+	}
 	return NULL;
 }
 
@@ -274,6 +317,7 @@ void InitCmdMapping()
 	mFuncPtr.insert(std::make_pair<std::string, int()>("info", Info));
 	mFuncPtr.insert(std::make_pair<std::string, int()>("cd", Cd));
 	mFuncPtr.insert(std::make_pair<std::string, int()>("dir", Dir));
+	mFuncPtr.insert(std::make_pair<std::string, int()>("dir-r", Dir_r));
 	mFuncPtr.insert(std::make_pair<std::string, int()>("md", MkDir));
 	mFuncPtr.insert(std::make_pair<std::string, int()>("rd", RmDir));
 	mFuncPtr.insert(std::make_pair<std::string, int()>("newfile", NewFile));
@@ -318,17 +362,10 @@ void InitDisk()
 	}
 	else
 	{
-		//std::fstream fdisk("DISK", std::ios::binary | std::ios::in);
-		// 
-		//fdisk.read(disk[0], 1024);
-		//memcpy_s(&supBlock, 1024, (SuperBlock*)disk[0], 1024);
-		///*
+		virtualDiskReader<SuperBlock>(&supBlock, 0, 0, 0);
+		//TODO:
 		//parseSuperBlock
 		//*/
-		//for (int i = 1; i < blockNum; i++)
-		//{
-		//	fdisk.read(disk[i], 1024);
-		//}
 		//fdisk.close();
 	}
 }
@@ -372,7 +409,6 @@ int main()
 	InitPython();
 	InitCmdMapping();
 	InitDisk();
-
 	PyObject* pModule = NULL;
 	PyObject* pFunc = NULL;
 
