@@ -13,21 +13,18 @@ using ll = long long;
 constexpr int inodeStart = 1;
 constexpr int inodeSize = 1024;//i结点区大小为 16*1024*64/1024 1024k
 constexpr int fileBmStart = 1025;//位图区起始点
-constexpr int fileBmSize = 13;//文件块位图 100*1024/(1024*8) 12.5k ~ 13k
-constexpr int inodeBmStart = 1038;
+constexpr int fileBmSize = 16;//文件块位图 128*1024/(1024*8) 16k
+constexpr int inodeBmStart = 1041;
 constexpr int inodeBmSize = 2;
-constexpr int fileStart = 1040;
-constexpr int fileSize = 101360;//dir file region 100*1024 - 1040
+constexpr int fileStart = 1043;
 
-constexpr bool fileBm = true;
-constexpr bool inodeBm = false;
+constexpr bool fileType = true;
+constexpr bool inodeType = false;
+
+constexpr bool dir_Inode = false;
+constexpr bool file_Inode = true;
 
 std::string userName = "shu";
-
-//数量常量
-constexpr int iNodeNum = 16 * 1024;
-constexpr int blockNum = 100 * 1024;
-
 
 unsigned char bitQuick[8]{
 	unsigned char(0b10000000),
@@ -42,9 +39,20 @@ unsigned char bitQuick[8]{
 
 std::deque<std::pair<std::string, int>> pathDeque;//保存从根目录到当前目录之间的目录
 
-int lastFreeFile = 2;
+int lastFreeFile = 0;//表示第一个位图所在的Byte
 
-int lastFreeInode = 1;
+int lastFreeInode = 0;//表示第一个位图所在的Byte
+
+char* emptyInode = new char[64];
+
+int* rmFileids = new int[10];//移除的文件列表
+int* rmInodeids = new int[10];//移除的inode列表
+
+int rmFileNum = 0;
+int rmInodeNum = 0;
+
+size_t rmFileCap = 10;//移除的文件列表容量
+size_t rmInodeCap = 10;//移除的inode列表容量
 
 std::string dec2hex(int i)
 {
@@ -61,11 +69,4 @@ std::string dec2hex(int i)
 
 	std::string s = s_temp.substr(s_temp.length() - 5, s_temp.length());    //取右width位
 	return "0x" + s;
-}
-
-std::string fileSizeAlign(int fileSize)
-{
-	std::string value;
-	return value;
-	//TODO:将文件的大小对齐输出，避免\t的干扰
 }

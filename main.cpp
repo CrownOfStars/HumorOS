@@ -1,4 +1,5 @@
 #include <iostream>
+#include <iomanip>
 #include <fstream> 
 #include <cstring>
 #include <map>
@@ -13,8 +14,33 @@ std::map<std::string, int(*)()> mFuncPtr;
 
 int Info()
 {
-	std::cout << ("this is info command.\n");
-	return 0;
+	for (int i = 0; i < curDirSize; i++)
+	{
+		for (int u = 0; u < 32; u++)
+		{
+			if (strcmp(curDir[i].aMap[u].Name, _PyUnicode_AsString(argv)) == 0)
+			{
+				//输出inode的详细信息
+				inode* inodep = new inode();
+				virtualDiskReader<inode>(inodep, inodeStart, curDir[i].aMap[u].inodeId);
+				std::cout << "创建时间" << inodep->createTime << std::endl;
+				std::cout << "保护码" << inodep->mode_uid << std::endl;
+				std::cout << "文件大小" << inodep->fileSize << std::endl;
+				std::cout << "文件块号:\n";
+				for (int i = 0; i < inodep->dirSize(); i++) {
+					std::cout << inodep->Id(i) << std::endl;
+				}
+				delete inodep;
+				return 0;
+			}
+			else if (!curDir[i].aMap[u].Name[0])
+			{
+				std::cout << "no such file" << std::endl;
+				return 0;
+			}
+		}
+	}
+	return -1;
 }
 
 int Cd()
@@ -26,85 +52,81 @@ int Cd()
 			pathDeque.pop_back();
 			if (!pathDeque.empty())//回到父目录的i结点
 			{
-				int inode_id = pathDeque.back().second;//为了代码更好看，优化交给编译器
-				virtualDiskReader<inode>(curInode, inodeStart, 0, inode_id);
+				int inode_id = pathDeque.back().second;
+				virtualDiskReader<inode>(curInode, inodeStart, inode_id);
 			}
 			else//如果回到根结点
 			{
-				virtualDiskReader<inode>(curInode, inodeStart, 0, 0);//回到根目录的i结点
+				virtualDiskReader<inode>(curInode, inodeStart, 0);//回到根目录的i结点
 			}
 		}
+		dirFile* p = curDir;
+		curDir = curInode->dir();
+		curDirSize = curInode->dirSize();
+		delete[] p;//更新curDir
 		return 0;
 	}
 	else if (strcmp("/", _PyUnicode_AsString(argv)) == 0)//回到根目录
 	{
 		pathDeque.clear();
-		virtualDiskReader<inode>(curInode, inodeStart, 0, 0);//回到根目录的i结点
+		virtualDiskReader<inode>(curInode, inodeStart, 0);//回到根目录的i结点
+		dirFile* p = curDir;
+		curDir = curInode->dir();
+		curDirSize = curInode->dirSize();
+		delete[] p;//更新curDir
 		return 0;
 	}
-	dirFile* pdirF = curInode->getDir();
-	for (int i = 0; i < curInode->dirSize(); i++)
+	else
 	{
-		for (int u = 0; u < 32; u++)
+		for (int i = 0; i < curDirSize; i++)
 		{
-			if (pdirF[i].aMap[u].Name[0] == '/')
+			for (int u = 0; u < 32; u++)
 			{
-				if (strcmp(pdirF[i].aMap[u].Name + 1, _PyUnicode_AsString(argv)) == 0)
+				if (strcmp(curDir[i].aMap[u].Name, _PyUnicode_AsString(argv)) == 0)
 				{
-					int inode_id = pdirF[i].aMap[u].inodeId; //为了代码更好看，优化交给编译器
-					pathDeque.push_back(std::make_pair(_PyUnicode_AsString(argv), inode_id));
-					virtualDiskReader<inode>(curInode, inodeStart, 0, inode_id);
-					delete pdirF;
+					int inode_id = curDir[i].aMap[u].inodeId;
+					pathDeque.push_back(std::make_pair(curDir[i].aMap[u].Name+1, inode_id));
+					virtualDiskReader<inode>(curInode, inodeStart, inode_id);
+					dirFile* p = curDir;
+					curDir = curInode->dir();
+					curDirSize = curInode->dirSize();
+					delete[] p;//更新curDir
 					return 0;
 				}
-			}
-			else if (pdirF[i].aMap[u].Name[0])
-			{
-				continue;//this is a file name
-			}
-			else
-			{
-				std::cout << "no such dictionary" << std::endl;
-				delete[] pdirF;
-				return -1;
+				else
+				{
+					std::cout << "no such dictionary" << std::endl;
+					return -1;
+				}
 			}
 		}
 	}
-	delete[] pdirF;
-	return NULL;
+	return -1;
 }
 
 int Dir()
 {
-	std::cout << "类型 物理地址 保护码 文件大小\t文件名\n";
-	dirFile* pdirF = curInode->getDir();
-	for (int i = 0; i < curInode->dirSize(); i++)
+	std::cout << "类型  物理地址  保护码 文件大小 文件名" << std::endl;//输出表头
+
+	for (int i = 0; i < curDirSize; i++)
 	{
 		for (int u = 0; u < 32; u++)
 		{
-			if (pdirF[i].aMap[u].Name[0] == '/')
-			{
-				std::cout << inodeInfo(pdirF[i].aMap[u].Name[0], pdirF[i].aMap[u].inodeId);
-				std::cout << pdirF[i].aMap[u].Name + 1 << std::endl;//文件存在,获取文件信息
-			}
-			else if (pdirF[i].aMap[u].Name[0] == '-')
+			if (curDir[i].aMap[u].Name[0] == '-')//已经被移除的文件(夹)
 			{
 				continue;
 			}
-			else if (!pdirF[i].aMap[u].Name[0])
+			else if (!curDir[i].aMap[u].Name[0])//已经遍历到尾部准备写入
 			{
-				std::cout << "\n";
-				return 0;//遍历到未创建过文件的区域，终止遍历
+				return 0;
 			}
 			else
 			{
-				std::cout << inodeInfo(pdirF[i].aMap[u].Name[0], pdirF[i].aMap[u].inodeId);
-				std::cout << pdirF[i].aMap[u].Name << std::endl;//文件存在,获取文件信息
+				printInodeInfo(curDir[i].aMap[u].Name, curDir[i].aMap[u].inodeId);
 			}
 		}
 	}
-	std::cout << "\n";
-	return 0;
+	return -1;
 }
 
 int Dir_r()
@@ -115,195 +137,244 @@ int Dir_r()
 
 int MkDir()
 {
-	dirFile* dirF = curInode->getDir();
-	inodeMap* imapp = new inodeMap();
-	for (int i = 0; i < curInode->dirSize(); i++)
+	inodeMap* imapp = nullptr;
+	int pos = 0;
+	for (int i = 0; i < curDirSize; i++)
 	{
 		for (int u = 0; u < 32; u++)
 		{
-			if (strcmp(dirF[i].aMap[u].Name, _PyUnicode_AsString(argv)) == 0)
+			if (strcmp(curDir[i].aMap[u].Name, _PyUnicode_AsString(argv)) == 0)
 			{
-				std::cout << "dir already exists\n";
-				delete imapp;
-				delete[] dirF;
-				return -1;
+				std::cout << "dir already exists" << std::endl;
+				return 0;
 			}
-			else if (dirF[i].aMap[u].Name[0] == '-')//removed dir
+			else if (curDir[i].aMap[u].Name[0] == '-')//被移除的文件夹
 			{
 				if (!imapp)//把写指针定位到此处
 				{
-					imapp = dirF[i].aMap+u;
+					imapp = curDir[i].aMap + u;
+					pos = i;
 				}
 			}
-			else if (!dirF[i].aMap[u].Name[0])
+			else if (!curDir[i].aMap[u].Name[0])//已经遍历到尾部准备写入
 			{
-				imapp->inodeId = lastFreeInode;
+				if (!imapp)
+				{
+					imapp = curDir[i].aMap + u;
+					pos = i;
+				}
+
+				inode* inodep = new inode{ 0 };
+				inodep->init(dir_Inode);
+
 				strcpy_s(imapp->Name, _PyUnicode_AsString(argv));//更新当前目录下的索引表
-				AssignInode();//写入到位图中，更新i结点区,为刚刚建立的i结点分配空文件
-				//AssignFile();
-				curInode->addDir(imapp);
-				delete imapp;
-				delete[] dirF;
+				imapp->inodeId = FillInodeBitmap();//为该目录分配inode区域以及inode位图号
+				//每次修改后再把curDir同步到文件中
+
+				virtualDiskWriter<inode>(inodep, inodeStart, imapp->inodeId);
+				//inode写入到磁盘中
+				virtualDiskWriter<dirFile>(&curDir[pos],fileStart, curInode->Id(pos));
+				//同时更新父目录文件
+				delete inodep;
 				return 0;
 			}
 		}
 	}
-	delete imapp;
-	delete[] dirF;
+	int fileId = *FillFileBitmap(1);
+	curInode->addFile(fileId);
+	virtualDiskWriter<inode>(curInode, inodeStart, curInodeOffset);
+	curDirSize += 1;
+	dirFile* dirp = new dirFile[curDirSize];
+	memcpy_s(dirp, size_t(curDirSize) * 1024, curDir, size_t(curDirSize-1) * 1024);
+	delete[] curDir;
+	curDir = dirp;
+	dirFile* newdir = new dirFile();
+	strcpy_s(newdir->aMap[0].Name, _PyUnicode_AsString(argv));
+	inode* inodep = new inode{ 0 };
+	inodep->init(dir_Inode);
+	newdir->aMap[0].inodeId = FillInodeBitmap();
+	memcpy_s(dirp + size_t(curDirSize - 1), 1024, newdir, 1024);
+	virtualDiskWriter<inode>(inodep, inodeStart, newdir->aMap[0].inodeId);
+	virtualDiskReader<dirFile>(newdir,fileStart, fileId);
+	delete newdir;
 	return 0;
 }
 
 int RmDir()
 {
-	dirFile* pdirF = new dirFile();
-	for (int i = 0; i < curInode->fileSize; i++)
+	for (int i = 0; i < curDirSize; i++)
 	{
-		virtualDiskReader<dirFile>(pdirF, fileStart, curInode->file(i), 0);
 		for (int u = 0; u < 32; u++)
 		{
-			if (pdirF[i].aMap[u].Name[0] == '/')
+			if (strcmp(curDir[i].aMap[u].Name, _PyUnicode_AsString(argv)) == 0)
 			{
-				if (strcmp(pdirF[i].aMap[u].Name + 1, _PyUnicode_AsString(argv)) == 0)
-				{
-					pdirF[i].aMap[u].Name[0] = '-';
-					if (curInode->fileSize > i * 32 + u)
-					{
-						curInode->fileSize = i * 32 + u;
-					}
-					//rm dirinfo from parent dir
-					//pdirF[i].aMap[u].inodeIndex//rm inode info from inodebitmap
-					//rm filebitmap
-					//TODO: rmfile will only rm inodebitmap and filebitmap
-					//TODO: dir command will judge if file exists by bitmap
-					//helpful to distingwish between file removed and block unused
+				curDir[i].aMap[u].Name[0] = '-';
+				addRm(inodeType, curDir[i].aMap[u].inodeId);//移除该文件夹的inode位图
+				
+				inode* p = new inode();
+				virtualDiskReader<inode>(p, inodeStart, curDir[i].aMap[u].inodeId);
+				
+				dirFile* pdir = p->dir();
+				RemoveDFS(p,pdir,p->dirSize());//递归删除该文件夹下的子目录
+				
+				for (int i = 0; i < p->dirSize(); i++)
+				{//需要删除p本身所指向的file
+					addRm(fileType, p->Id(i));
 				}
+				runRm();//执行删除操作
+				
+				delete p;
+				delete pdir;
+				virtualDiskWriter<dirFile>(&curDir[i], fileStart, curInode->Id(i));
+				//同时更新父目录文件
+				return 0;
 			}
-			else if (pdirF[i].aMap[u].Name[0])
+			else if (curDir[i].aMap[u].Name[0] == '-')
 			{
 				continue;
 			}
-			else
+			else if (!curDir[i].aMap[u].Name[0])
 			{
-				std::cout << ("no such dictionary\n");
-				return NULL;
+				std::cout << "no such dictionary" << std::endl;
+				return 0;
 			}
 		}
 	}
-	return NULL;
+	return -1;
 }
 
 int NewFile()
 {
-	dirFile* pdirF = curInode->getDir();
-	inodeMap* imapp = new inodeMap();
-	for (int i = 0; i < curInode->dirSize(); i++)
+	inodeMap* imapp = nullptr;
+	int pos = 0;
+	for (int i = 0; i < curDirSize; i++)
 	{
 		for (int u = 0; u < 32; u++)
 		{
-			if (strcmp(pdirF[i].aMap[u].Name , _PyUnicode_AsString(argv)) == 0)
+			if (strcmp(curDir[i].aMap[u].Name, _PyUnicode_AsString(argv)) == 0)
 			{
 				std::cout << "file already exists" << std::endl;
-				delete[] pdirF;
 				return 0;
 			}
-			else if (pdirF[i].aMap[u].Name[0] == '-')//removed dir
+			else if (curDir[i].aMap[u].Name[0] == '-')//removed dir
 			{
 				if (!imapp)//把写指针定位到此处
 				{
-					imapp = pdirF[i].aMap + u;
+					imapp = curDir[i].aMap + u;
+					pos = i;
 				}
 			}
-			else if (!pdirF[i].aMap[u].Name[0])
+			else if (!curDir[i].aMap[u].Name[0])
 			{
-				imapp->inodeId = lastFreeInode;
-				strcpy_s(imapp->Name, _PyUnicode_AsString(argv));//更新当前目录下的索引表
-				AssignInode();//写入到位图中，更新i结点区,为刚刚建立的i结点分配空文件
-				std::ifstream in("cache", std::ios::binary);
-				std::istreambuf_iterator<char>beg(in), end;
-				std::string strdata(beg, end);
-				in.close();
-				
-				//AssignFile();
-				curInode->addDir(imapp);
-				delete imapp;
-				delete[] pdirF;
+				if (!imapp)//把写指针定位到此处
+				{
+					imapp = curDir[i].aMap + u;
+					pos = i;
+				}
+				inode* inodep = new inode{ 0 };///
+				inodep->init(file_Inode);
+				strcpy_s(imapp->Name, _PyUnicode_AsString(argv));
+				imapp->inodeId = FillInodeBitmap();
+
+				virtualDiskWriter<inode>(inodep, inodeStart, imapp->inodeId);//写入到磁盘中
+
+				virtualDiskWriter<dirFile>(&curDir[pos], fileStart, curInode->Id(pos));
+				delete inodep;
 				return 0;
 			}
 		}
 	}
-	delete[] pdirF;
-	return NULL;
+	return -1;
 }
 
 int Cat()
 {
-	dirFile* pdirF = curInode->getDir();
-	for (int i = 0; i < curInode->dirSize(); i++)
+	for (int i = 0; i < curDirSize; i++)
 	{
 		for (int u = 0; u < 32; u++)
 		{
-			if (strcmp(pdirF[i].aMap[u].Name, _PyUnicode_AsString(argv)) == 0)
+			
+			if (strcmp(curDir[i].aMap[u].Name, _PyUnicode_AsString(argv)) == 0)
 			{
 				inode* inodep = new inode();
-				virtualDiskReader<inode>(inodep, inodeStart, 0, pdirF[i].aMap[u].inodeId);
+				virtualDiskReader<inode>(inodep, inodeStart, curDir[i].aMap[u].inodeId);
 				char* fileContent = inodep->getFile();
 				std::cout << fileContent << std::endl;
 				delete[] fileContent;
-				delete[] pdirF;
 				return 0;
 			}
-			else if (!pdirF[i].aMap[u].Name[0])
+			else if (!curDir[i].aMap[u].Name[0])
 			{
 				std::cout << "no such file" << std::endl;
-				delete[] pdirF;
 				return 0;
 			}
 		}
 	}
-	std::cout << "WARNING: Unexpected situation: No space left" << std::endl;
-	delete[] pdirF;
-	return NULL;
+	return -1;
 }
 
-int Copy()
+int Copy()//把数据复制到cache中
 {
-	std::cout << "this is copy command\n";
-	return 0;
+	for (int i = 0; i < curDirSize; i++)
+	{
+		for (int u = 0; u < 32; u++)
+		{
+
+			if (strcmp(curDir[i].aMap[u].Name, _PyUnicode_AsString(argv)) == 0)
+			{
+				inode* inodep = new inode();
+				virtualDiskReader<inode>(inodep, inodeStart, curDir[i].aMap[u].inodeId);
+				char* fileContent = inodep->getFile();
+				std::ofstream fw("cache", std::ios::binary);
+				fw.write(fileContent,size_t(inodep->dirSize())*1024);
+				fw.close();
+				delete[] fileContent;
+				return 0;
+			}
+			else if (!curDir[i].aMap[u].Name[0])
+			{
+				std::cout << "no such file" << std::endl;
+				return -1;
+			}
+		}
+	}
+	return -1;
 }
 
 int Delete()
 {
-	dirFile* pdirF = curInode->getDir();
-	for (int i = 0; i < curInode->dirSize(); i++)
+	for (int i = 0; i < curDirSize; i++)
 	{
 		for (int u = 0; u < 32; u++)
 		{
-			if (strcmp(pdirF[i].aMap[u].Name , _PyUnicode_AsString(argv)) == 0)
+			if (strcmp(curDir[i].aMap[u].Name, _PyUnicode_AsString(argv)) == 0)
 			{
-				pdirF[i].aMap[u].Name[0] = '-';
-				//TODO:calculte the filesize
-				//rm dirinfo from parent dir
-				//pdirF[i].aMap[u].inodeIndex//rm inode info from inodebitmap
-				//rm filebitmap
-				//TODO: rmfile will only rm inodebitmap and filebitmap
-				//TODO: dir command will judge if file exists by bitmap
-				//helpful to distingwish between file removed and block unused
+				curDir[i].aMap[u].Name[0] = '-';
+				addRm(inodeType, curDir[i].aMap[u].inodeId);
+				inode* inodep = new inode();
+				virtualDiskReader<inode>(inodep, inodeStart, curDir[i].aMap[u].inodeId);
+				for (int i = 0; i < inodep->dirSize(); i++)
+				{
+					addRm(fileType, inodep->Id(i));
+				}
+				runRm();
+				delete inodep;
+				return 0;
 			}
-			else if(!pdirF[i].aMap[u].Name[0])
+			else if (!curDir[i].aMap[u].Name[0])
 			{
 				std::cout << "no such file" << std::endl;
-				delete[] pdirF;
-				return NULL;
+				return 0;
 			}
 		}
 	}
-	return NULL;
+	return -1;
 }
 
 int Check()
 {
-	std::cout << "this is a check command\n";
-	return NULL;
+	PyEval_CallObject(PyObject_GetAttrString(PyImport_ImportModule("View"), "Func"), NULL);
+	return 0;
 }
 
 int Error()
@@ -338,31 +409,43 @@ void InitPython()
 
 void InitDisk()
 {
-	if (true)//_access("DISK", 0))
+	if (true)//_access("DISK", 0))//如果文件不存在
 	{
-		File* disk = new File[blockNum];
+		File* disk = new File[1024 * 100];
 		std::ofstream fdisk("DISK", std::ios::binary);
 		memcpy_s(disk[0], 1024, (File*)&supBlock, 1024);
-		for (int i = 1; i < blockNum; i++)
+		for (int i = 1; i < 1024 * 100; i++)
 		{
 			memset(disk[i], 0, 1024);
 		}
-		//home dir 是文件区的第一个dir file
-		inode homeInode;
+		inode homeInode;//homeInode 是inode区的第一个inode
 		homeInode.createTime = 1492244880ll;
 		homeInode.file_id[0] = 1;
-		//homeInode 是inode区的第一个inode
-		memcpy_s(disk + 1, 1024, &homeInode, sizeof(inode));
+		memcpy_s(curInode, sizeof(inode), &homeInode, sizeof(inode));//设为当前的inode
+		dirFile* homedir = new dirFile();
+		curDir = homedir;//设为当前的dir
+		memcpy_s(disk + 1, 1024, &homeInode, sizeof(inode));//写入文件
 		memcpy_s(disk + fileBmStart, 1024, &bitQuick[1], sizeof(char));
-		memcpy_s(disk + inodeBmStart, 1024, &bitQuick[1], sizeof(char));
-		memcpy_s(curInode,sizeof(inode),&homeInode,sizeof(inode));
-		fdisk.write((char*)disk, 1024*1024*100);
+		//homedir占有1号,文件号为0表示该文件不存在
+		memcpy_s(disk + inodeBmStart, 1024, &bitQuick[0], sizeof(char));
+		//homeinode占有0号
+
+		fdisk.write((char*)disk, 1024 * 1024 * 100);//记录到本地磁盘
 		fdisk.close();
-		delete[] disk;
+		delete[] disk;//清空初始化数据
 	}
 	else
 	{
-		virtualDiskReader<SuperBlock>(&supBlock, 0, 0, 0);
+		virtualDiskReader<SuperBlock>(&supBlock, 0, 0);//读取超级块
+		
+		/*
+		memcpy_s(curInode, sizeof(inode), &homeInode, sizeof(inode));//设为当前的inode
+
+		dirFile* homedir = new dirFile();
+		curDir = homedir;//设为当前的dir
+		*/
+		//fileStart = supBlock.fileBlockRegion[0];
+		//inodeStart = supBlock.iNodeRegion[0];
 		//TODO:
 		//parseSuperBlock
 		//*/
@@ -409,13 +492,13 @@ int main()
 	InitPython();
 	InitCmdMapping();
 	InitDisk();
+	//初始化磁盘已经python环境
 	PyObject* pModule = NULL;
 	PyObject* pFunc = NULL;
 
-	//加载python脚本
-
 	pModule = PyImport_ImportModule("Pack");
-	pFunc = PyObject_GetAttrString(pModule, "Func");
+	pFunc = PyObject_GetAttrString(pModule, "xFunc");
+	//加载命令解释器
 	while (true)
 	{
 		ShowCurPath();
